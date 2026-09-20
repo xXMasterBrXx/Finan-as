@@ -42,7 +42,7 @@ jobs:
 
           # Restore debug keystore from base64 if present, or create a standard debug keystore
           if [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
+            (base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null) || true
           fi
 
           if [ ! -f debug.keystore ] || [ ! -s debug.keystore ]; then
@@ -51,6 +51,11 @@ jobs:
               -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+
+          # Copy to app directory as well just in case
+          cp debug.keystore app/debug.keystore 2>/dev/null || true
+          echo "Debug keystore ready:"
+          ls -la debug.keystore
 
           # Ensure gradlew is executable
           chmod +x gradlew
