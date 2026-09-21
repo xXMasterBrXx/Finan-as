@@ -131,6 +131,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _updateCheckStatus = MutableStateFlow<com.example.util.UpdateCheckResult?>(null)
     val updateCheckStatus: StateFlow<com.example.util.UpdateCheckResult?> = _updateCheckStatus.asStateFlow()
 
+    private val _showTopUpdateBanner = MutableStateFlow(false)
+    val showTopUpdateBanner: StateFlow<Boolean> = _showTopUpdateBanner.asStateFlow()
+
+    private val _isCheckingUpdates = MutableStateFlow(false)
+    val isCheckingUpdates: StateFlow<Boolean> = _isCheckingUpdates.asStateFlow()
+
     private val _downloadProgress = MutableStateFlow<Int?>(null)
     val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
 
@@ -172,6 +178,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             if (userPreferences.p2pSyncEnabled.value && savedKey.isNotBlank()) {
                 p2pSyncManager.startSync(savedKey)
             }
+
+            // Automatic background check for new releases on startup
+            checkForUpdates(isAutoCheck = true)
         }
     }
 
@@ -658,20 +667,29 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setGithubRepo(repo: String) {
-        userPreferences.setGithubRepo(repo)
+    fun dismissTopUpdateBanner() {
+        _showTopUpdateBanner.value = false
     }
 
-    fun checkForUpdates() {
+    fun checkForUpdates(isAutoCheck: Boolean = false) {
         viewModelScope.launch {
-            _updateCheckStatus.value = null
-            val repo = githubRepo.value
-            if (repo.isBlank() || !repo.contains("/")) {
-                _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error("Formato de repositório inválido. Use: usuario/repositorio")
-                return@launch
+            if (!isAutoCheck) {
+                _isCheckingUpdates.value = true
+                _updateCheckStatus.value = null
             }
-            val result = updateManager.checkForUpdates(repo)
-            _updateCheckStatus.value = result
+            val result = updateManager.checkForUpdates(com.example.util.GitHubUpdateManager.DEFAULT_REPO)
+            if (isAutoCheck) {
+                if (result is com.example.util.UpdateCheckResult.UpdateAvailable) {
+                    _updateCheckStatus.value = result
+                    _showTopUpdateBanner.value = true
+                }
+            } else {
+                _updateCheckStatus.value = result
+                if (result is com.example.util.UpdateCheckResult.UpdateAvailable) {
+                    _showTopUpdateBanner.value = true
+                }
+                _isCheckingUpdates.value = false
+            }
         }
     }
 

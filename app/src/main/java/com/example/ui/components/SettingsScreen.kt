@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
@@ -58,6 +60,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -117,9 +122,10 @@ fun SettingsScreen(
     onClearBackupStatusMessage: () -> Unit = {},
     onResetToSampleData: () -> Unit,
     onClearAllData: () -> Unit,
-    githubRepo: String = "mathausgomes/finance-tracker",
+    githubRepo: String = com.example.util.GitHubUpdateManager.DEFAULT_REPO,
     onGithubRepoChange: (String) -> Unit = {},
     updateCheckStatus: com.example.util.UpdateCheckResult? = null,
+    isCheckingUpdates: Boolean = false,
     downloadProgress: Int? = null,
     isDownloading: Boolean = false,
     onCheckForUpdates: () -> Unit = {},
@@ -829,27 +835,77 @@ fun SettingsScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Configure e busque por novas versões diretamente do repositório no GitHub.",
+                    text = "O FinanFlow verifica atualizações automaticamente ao abrir o app e permite checagens manuais a qualquer momento.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                OutlinedTextField(
-                    value = githubRepo,
-                    onValueChange = onGithubRepoChange,
-                    label = { Text("Repositório GitHub (usuario/repositorio)") },
-                    placeholder = { Text("mathausgomes/finance-tracker") },
-                    singleLine = true,
+                Surface(
                     shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Canal Oficial de Atualizações",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "github.com/xXMasterBrXx/Finan-as",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
 
                 Button(
                     onClick = { onCheckForUpdates() },
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    enabled = !isCheckingUpdates && !isDownloading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("check_updates_button")
                 ) {
-                    Text("Verificar Atualizações")
+                    if (isCheckingUpdates) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Buscando Atualizações...")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Verificar Atualizações")
+                    }
                 }
 
                 // If downloading is in progress, show progress bar
@@ -923,12 +979,100 @@ fun SettingsScreen(
             title = "Sobre o FinanFlow",
             icon = Icons.Default.Info
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "FinanFlow v1.1",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            val installedVersionName = com.example.BuildConfig.VERSION_NAME.let {
+                if (it.startsWith("v", ignoreCase = true)) it else "v$it"
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column {
+                        Text(
+                            text = "FinanFlow",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Versão instalada",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.testTag("app_version_badge")
+                    ) {
+                        Text(
+                            text = installedVersionName,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+
+                // Status de sincronização com as releases do GitHub
+                when (val status = updateCheckStatus) {
+                    is com.example.util.UpdateCheckResult.NoUpdate -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1B5E20).copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2E7D32),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Você está na versão mais recente do GitHub",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color(0xFF1B5E20)
+                                )
+                            }
+                        }
+                    }
+                    is com.example.util.UpdateCheckResult.UpdateAvailable -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Nova release disponível no GitHub: ${status.latestVersionName}",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+
                 Text(
                     text = "Controle financeiro pessoal offline-first com armazenamento local protegido via Room Database. Desenvolvido com Kotlin e Jetpack Compose Material 3.",
                     style = MaterialTheme.typography.bodySmall,

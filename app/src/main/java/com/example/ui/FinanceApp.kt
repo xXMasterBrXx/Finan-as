@@ -87,6 +87,7 @@ import com.example.ui.components.P2PStatusBadge
 import com.example.ui.components.P2PSyncDialog
 import com.example.ui.components.SettingsScreen
 import com.example.ui.components.SummaryCards
+import com.example.ui.components.TopUpdateBanner
 import com.example.ui.components.TransactionDialog
 import com.example.ui.components.TransactionItem
 import com.example.ui.components.TransactionList
@@ -120,6 +121,8 @@ fun FinanceApp(
     val lastBackupTimestamp by viewModel.lastBackupTimestamp.collectAsStateWithLifecycle()
     val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
     val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
+    val showTopUpdateBanner by viewModel.showTopUpdateBanner.collectAsStateWithLifecycle()
+    val isCheckingUpdates by viewModel.isCheckingUpdates.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val isDownloading by viewModel.isDownloading.collectAsStateWithLifecycle()
 
@@ -214,6 +217,20 @@ fun FinanceApp(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
+                // Top Update Notification Banner / Popup
+                TopUpdateBanner(
+                    updateStatus = updateCheckStatus,
+                    isVisible = showTopUpdateBanner,
+                    isDownloading = isDownloading,
+                    downloadProgress = downloadProgress,
+                    onUpdateClick = { downloadUrl ->
+                        viewModel.downloadAndInstallApk(context, downloadUrl)
+                    },
+                    onDismiss = {
+                        viewModel.dismissTopUpdateBanner()
+                    }
+                )
+
                 // Month Selector Header - show on Dashboard, Extrato & Cartões
                 if (selectedTab != 3) {
                     MonthSelector(
@@ -457,8 +474,8 @@ fun FinanceApp(
                             onResetToSampleData = { viewModel.resetToSampleData() },
                             onClearAllData = { viewModel.clearAllData() },
                             githubRepo = githubRepo,
-                            onGithubRepoChange = { viewModel.setGithubRepo(it) },
                             updateCheckStatus = updateCheckStatus,
+                            isCheckingUpdates = isCheckingUpdates,
                             downloadProgress = downloadProgress,
                             isDownloading = isDownloading,
                             onCheckForUpdates = { viewModel.checkForUpdates() },

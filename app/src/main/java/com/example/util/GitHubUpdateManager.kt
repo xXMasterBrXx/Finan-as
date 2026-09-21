@@ -21,9 +21,13 @@ sealed class UpdateCheckResult {
 }
 
 class GitHubUpdateManager {
+    companion object {
+        const val DEFAULT_REPO = "xXMasterBrXx/Finan-as"
+    }
+
     private val client = OkHttpClient()
 
-    suspend fun checkForUpdates(ownerRepo: String): UpdateCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdates(ownerRepo: String = DEFAULT_REPO): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val url = "https://api.github.com/repos/$ownerRepo/releases/latest"
             val request = Request.Builder()

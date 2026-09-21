@@ -68,7 +68,7 @@ class UserPreferences(context: Context) {
     val monthlyBudgetLimit: StateFlow<Double> = _monthlyBudgetLimit.asStateFlow()
 
     private val _githubRepo = MutableStateFlow(
-        prefs.getString(KEY_GITHUB_REPO, "mathausgomes/finance-tracker") ?: "mathausgomes/finance-tracker"
+        prefs.getString(KEY_GITHUB_REPO, com.example.util.GitHubUpdateManager.DEFAULT_REPO) ?: com.example.util.GitHubUpdateManager.DEFAULT_REPO
     )
     val githubRepo: StateFlow<String> = _githubRepo.asStateFlow()
 

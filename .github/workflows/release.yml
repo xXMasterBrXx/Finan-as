@@ -50,12 +50,19 @@ jobs:
           ls -la debug.keystore
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache
+        run: |
+          TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
+          CLEAN_VERSION=$(echo "$TAG_NAME" | sed -e 's|^refs/tags/||' -e 's|^v||')
+          if [ -z "$CLEAN_VERSION" ] || [ "$CLEAN_VERSION" = "main" ] || [ "$CLEAN_VERSION" = "master" ]; then
+            CLEAN_VERSION="1.0.0"
+          fi
+          echo "Compilando APK com versionName='$CLEAN_VERSION' a partir da tag '$TAG_NAME'"
+          ./gradlew assembleDebug -PversionName="$CLEAN_VERSION" --no-daemon --no-configuration-cache
 
       - name: Prepare APK for Release
         run: |
           mkdir -p release-output
-          TAG_NAME="${{ inputs.tag_name || github.ref_name }}"
+          TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
           [ -z "$TAG_NAME" ] && TAG_NAME="latest"
 
           # Find the generated APK

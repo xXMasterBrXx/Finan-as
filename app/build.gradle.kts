@@ -17,8 +17,15 @@ android {
     applicationId = "com.aistudio.financetracker.kpmxqv"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    val propVersionName = (project.findProperty("versionName") as? String)
+        ?: System.getenv("APP_VERSION_NAME")
+        ?: "1.0.0"
+    val propVersionCode = ((project.findProperty("versionCode") as? String)?.toIntOrNull())
+        ?: (System.getenv("APP_VERSION_CODE")?.toIntOrNull())
+        ?: 1
+
+    versionCode = propVersionCode
+    versionName = propVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
