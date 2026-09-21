@@ -125,6 +125,7 @@ fun FinanceApp(
     val isCheckingUpdates by viewModel.isCheckingUpdates.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val isDownloading by viewModel.isDownloading.collectAsStateWithLifecycle()
+    val installedVersionName by viewModel.installedVersionName.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -224,7 +225,8 @@ fun FinanceApp(
                     isDownloading = isDownloading,
                     downloadProgress = downloadProgress,
                     onUpdateClick = { downloadUrl ->
-                        viewModel.downloadAndInstallApk(context, downloadUrl)
+                        val targetTag = (updateCheckStatus as? com.example.util.UpdateCheckResult.UpdateAvailable)?.latestVersionName
+                        viewModel.downloadAndInstallApk(context, downloadUrl, targetTag)
                     },
                     onDismiss = {
                         viewModel.dismissTopUpdateBanner()
@@ -473,13 +475,17 @@ fun FinanceApp(
                             onClearBackupStatusMessage = { viewModel.clearBackupStatusMessage() },
                             onResetToSampleData = { viewModel.resetToSampleData() },
                             onClearAllData = { viewModel.clearAllData() },
+                            installedVersionName = installedVersionName,
                             githubRepo = githubRepo,
                             updateCheckStatus = updateCheckStatus,
                             isCheckingUpdates = isCheckingUpdates,
                             downloadProgress = downloadProgress,
                             isDownloading = isDownloading,
                             onCheckForUpdates = { viewModel.checkForUpdates() },
-                            onDownloadAndInstallApk = { url -> viewModel.downloadAndInstallApk(context, url) },
+                            onDownloadAndInstallApk = { url ->
+                                val targetTag = (updateCheckStatus as? com.example.util.UpdateCheckResult.UpdateAvailable)?.latestVersionName
+                                viewModel.downloadAndInstallApk(context, url, targetTag)
+                            },
                             onClearUpdateStatus = { viewModel.clearUpdateStatus() }
                         )
                     }

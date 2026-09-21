@@ -16,7 +16,7 @@ import java.io.FileOutputStream
 
 sealed class UpdateCheckResult {
     data class UpdateAvailable(val latestVersionName: String, val downloadUrl: String, val releaseNotes: String) : UpdateCheckResult()
-    object NoUpdate : UpdateCheckResult()
+    data class NoUpdate(val currentTag: String = "") : UpdateCheckResult()
     data class Error(val message: String) : UpdateCheckResult()
 }
 
@@ -27,7 +27,10 @@ class GitHubUpdateManager {
 
     private val client = OkHttpClient()
 
-    suspend fun checkForUpdates(ownerRepo: String = DEFAULT_REPO): UpdateCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdates(
+        ownerRepo: String = DEFAULT_REPO,
+        installedVersion: String? = null
+    ): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val url = "https://api.github.com/repos/$ownerRepo/releases/latest"
             val request = Request.Builder()
@@ -44,9 +47,9 @@ class GitHubUpdateManager {
                 val tagName = json.optString("tag_name", "")
                 val bodyText = json.optString("body", "Sem notas de versão.")
                 
-                // Extract clean version name (e.g. "v1.2" -> "1.2")
-                val cleanTagName = tagName.removePrefix("v").trim()
-                val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v").trim()
+                // Extract clean version name (e.g. "v0.1.2" -> "0.1.2")
+                val cleanTagName = tagName.removePrefix("v").removePrefix("V").trim()
+                val currentVersion = (installedVersion ?: BuildConfig.VERSION_NAME).removePrefix("v").removePrefix("V").trim()
 
                 // Find APK in assets
                 val assetsArray = json.optJSONArray("assets")
@@ -74,7 +77,7 @@ class GitHubUpdateManager {
                         releaseNotes = bodyText
                     )
                 } else {
-                    UpdateCheckResult.NoUpdate
+                    UpdateCheckResult.NoUpdate(currentTag = tagName)
                 }
             }
         } catch (e: Exception) {
@@ -82,10 +85,16 @@ class GitHubUpdateManager {
         }
     }
 
-    private fun isNewerVersion(latest: String, current: String): Boolean {
+    fun isNewerVersion(latest: String, current: String): Boolean {
+        // If current is the old unversioned placeholder "1.0" or "1.0.0",
+        // and latest is an actual GitHub release (such as "0.1.2"), treat latest as an update.
+        if ((current == "1.0" || current == "1.0.0" || current.startsWith("1.0.0")) && latest != current) {
+            return true
+        }
+
         try {
-            val latestParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
-            val currentParts = current.split(".").map { it.toIntOrNull() ?: 0 }
+            val latestParts = latest.split(".").map { it.filter { ch -> ch.isDigit() }.toIntOrNull() ?: 0 }
+            val currentParts = current.split(".").map { it.filter { ch -> ch.isDigit() }.toIntOrNull() ?: 0 }
             val maxLength = maxOf(latestParts.size, currentParts.size)
             for (i in 0 until maxLength) {
                 val l = latestParts.getOrElse(i) { 0 }

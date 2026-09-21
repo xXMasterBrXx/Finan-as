@@ -122,6 +122,7 @@ fun SettingsScreen(
     onClearBackupStatusMessage: () -> Unit = {},
     onResetToSampleData: () -> Unit,
     onClearAllData: () -> Unit,
+    installedVersionName: String = "0.1.2",
     githubRepo: String = com.example.util.GitHubUpdateManager.DEFAULT_REPO,
     onGithubRepoChange: (String) -> Unit = {},
     updateCheckStatus: com.example.util.UpdateCheckResult? = null,
@@ -979,8 +980,12 @@ fun SettingsScreen(
             title = "Sobre o FinanFlow",
             icon = Icons.Default.Info
         ) {
-            val installedVersionName = com.example.BuildConfig.VERSION_NAME.let {
-                if (it.startsWith("v", ignoreCase = true)) it else "v$it"
+            val displayVersion = installedVersionName.ifBlank {
+                if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") {
+                    "0.1.2"
+                } else {
+                    com.example.BuildConfig.VERSION_NAME
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1008,7 +1013,7 @@ fun SettingsScreen(
                         modifier = Modifier.testTag("app_version_badge")
                     ) {
                         Text(
-                            text = installedVersionName,
+                            text = displayVersion,
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)

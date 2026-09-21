@@ -7,12 +7,14 @@ on:
       - master
     tags:
       - 'v*'
+      - '[0-9]+*'
+      - '*.*'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Criar nova Release no GitHub com esta tag (ex: v1.0.1). Deixe vazio para apenas gerar o APK para download.'
+        description: 'Criar nova Release no GitHub com esta tag (ex: 0.1.3 ou v0.1.3). Deixe vazio para apenas gerar o APK para download.'
         required: false
         default: ''
 
@@ -54,7 +56,7 @@ jobs:
           TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
           CLEAN_VERSION=$(echo "$TAG_NAME" | sed -e 's|^refs/tags/||' -e 's|^v||')
           if [ -z "$CLEAN_VERSION" ] || [ "$CLEAN_VERSION" = "main" ] || [ "$CLEAN_VERSION" = "master" ]; then
-            CLEAN_VERSION="1.0.0"
+            CLEAN_VERSION="0.1.2"
           fi
           echo "Compilando APK com versionName='$CLEAN_VERSION' a partir da tag '$TAG_NAME'"
           ./gradlew assembleDebug -PversionName="$CLEAN_VERSION" --no-daemon --no-configuration-cache
@@ -63,7 +65,7 @@ jobs:
         run: |
           mkdir -p release-output
           TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
-          [ -z "$TAG_NAME" ] && TAG_NAME="latest"
+          [ -z "$TAG_NAME" ] && TAG_NAME="0.1.2"
 
           # Find the generated APK
           APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
@@ -83,7 +85,7 @@ jobs:
           retention-days: 14
 
       - name: Upload APK to GitHub Release
-        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name || github.ref_name }}

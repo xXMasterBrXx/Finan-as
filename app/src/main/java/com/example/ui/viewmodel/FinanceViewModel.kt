@@ -143,6 +143,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
 
+    val installedVersionName: StateFlow<String> = combine(
+        userPreferences.installedVersionTag,
+        _updateCheckStatus
+    ) { tag, _ ->
+        if (tag.isNotBlank()) {
+            tag
+        } else if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") {
+            "0.1.2"
+        } else {
+            com.example.BuildConfig.VERSION_NAME
+        }
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        if (userPreferences.installedVersionTag.value.isNotBlank()) userPreferences.installedVersionTag.value
+        else if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") "0.1.2"
+        else com.example.BuildConfig.VERSION_NAME
+    )
+
     init {
         val db = AppDatabase.getInstance(application)
         p2pSyncManager = com.example.data.p2p.P2PSyncManager(application, db, userPreferences)
@@ -677,7 +696,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 _isCheckingUpdates.value = true
                 _updateCheckStatus.value = null
             }
-            val result = updateManager.checkForUpdates(com.example.util.GitHubUpdateManager.DEFAULT_REPO)
+            val currentVer = userPreferences.installedVersionTag.value.ifBlank {
+                com.example.BuildConfig.VERSION_NAME
+            }
+            val result = updateManager.checkForUpdates(
+                com.example.util.GitHubUpdateManager.DEFAULT_REPO,
+                installedVersion = currentVer
+            )
+            if (result is com.example.util.UpdateCheckResult.NoUpdate && result.currentTag.isNotBlank()) {
+                // If confirmed on latest release, sync the exact tag name from GitHub
+                userPreferences.setInstalledVersionTag(result.currentTag)
+            }
             if (isAutoCheck) {
                 if (result is com.example.util.UpdateCheckResult.UpdateAvailable) {
                     _updateCheckStatus.value = result
@@ -693,7 +722,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun downloadAndInstallApk(context: android.content.Context, downloadUrl: String) {
+    fun downloadAndInstallApk(context: android.content.Context, downloadUrl: String, targetVersion: String? = null) {
         viewModelScope.launch {
             _isDownloading.value = true
             _downloadProgress.value = 0
@@ -704,6 +733,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _downloadProgress.value = null
             
             result.onSuccess { apkFile ->
+                if (!targetVersion.isNullOrBlank()) {
+                    userPreferences.setInstalledVersionTag(targetVersion)
+                }
                 updateManager.triggerInstall(context, apkFile)
             }.onFailure { error ->
                 _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error("Falha ao baixar o arquivo: ${error.localizedMessage}")

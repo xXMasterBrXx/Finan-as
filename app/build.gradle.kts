@@ -19,10 +19,10 @@ android {
     targetSdk = 36
     val propVersionName = (project.findProperty("versionName") as? String)
         ?: System.getenv("APP_VERSION_NAME")
-        ?: "1.0.0"
+        ?: "0.1.2"
     val propVersionCode = ((project.findProperty("versionCode") as? String)?.toIntOrNull())
         ?: (System.getenv("APP_VERSION_CODE")?.toIntOrNull())
-        ?: 1
+        ?: 3
 
     versionCode = propVersionCode
     versionName = propVersionName
