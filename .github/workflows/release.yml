@@ -29,16 +29,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Prepare Keystore and Environment
         run: |
-          # Accept Android licenses
-          yes | sdkmanager --licenses 2>/dev/null || true
+          # Accept Android SDK licenses using the preinstalled Android SDK on GitHub runner
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses 2>/dev/null || yes | sdkmanager --licenses 2>/dev/null || true
 
           # Create .env if missing
           touch .env
