@@ -20,11 +20,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -40,9 +40,14 @@ jobs:
           # Create .env if missing
           touch .env
 
-          # Restore debug keystore from base64 if present, or create a standard debug keystore
+          # Restore debug keystore from file, inline data, or generate with keytool
           if [ -f debug.keystore.base64 ]; then
             (base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null) || true
+          fi
+
+          if [ ! -f debug.keystore ] || [ ! -s debug.keystore ]; then
+            echo "Restoring keystore from embedded base64..."
+            echo "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" | (base64 --decode > debug.keystore 2>/dev/null || base64 -d > debug.keystore 2>/dev/null) || true
           fi
 
           if [ ! -f debug.keystore ] || [ ! -s debug.keystore ]; then
