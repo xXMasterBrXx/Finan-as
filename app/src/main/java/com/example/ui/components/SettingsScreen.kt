@@ -1036,13 +1036,49 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 if (!isDownloading) {
-                                    Button(
-                                        onClick = { onDownloadAndInstallApk(status.downloadUrl) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Baixar e Instalar APK")
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = { onDownloadAndInstallApk(status.downloadUrl) },
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Baixar e Instalar APK")
+                                        }
+
+                                        val context = androidx.compose.ui.platform.LocalContext.current
+                                        OutlinedButton(
+                                            onClick = {
+                                                try {
+                                                    val browserIntent = android.content.Intent(
+                                                        android.content.Intent.ACTION_VIEW,
+                                                        android.net.Uri.parse(status.downloadUrl)
+                                                    ).apply {
+                                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(browserIntent)
+                                                } catch (_: Exception) {}
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Baixar pelo Navegador")
+                                        }
                                     }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "💡 Dica: Se o Android exibir \"App Não Instalado\", faça um Backup (.finbackup) acima, desinstale a versão antiga e instale a nova APK. Isso ocorre quando o app instalado anteriormente tinha uma chave de assinatura diferente do release do GitHub.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
                                 }
                             }
                         }

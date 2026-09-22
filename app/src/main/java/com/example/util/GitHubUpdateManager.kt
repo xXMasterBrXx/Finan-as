@@ -129,8 +129,10 @@ class GitHubUpdateManager {
                 }
                 val body = response.body ?: return@withContext Result.failure(Exception("Arquivo de download vazio"))
                 val contentLength = body.contentLength()
-                val cacheDir = context.externalCacheDir ?: context.cacheDir
-                val apkFile = File(cacheDir, "update.apk")
+                val baseDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    ?: context.externalCacheDir
+                    ?: context.cacheDir
+                val apkFile = File(baseDir, "FinanFlow_Update.apk")
                 if (apkFile.exists()) {
                     apkFile.delete()
                 }
@@ -150,6 +152,8 @@ class GitHubUpdateManager {
                         }
                     }
                 }
+                apkFile.setReadable(true, false)
+                apkFile.setWritable(true, false)
                 Result.success(apkFile)
             }
         } catch (e: Exception) {
@@ -193,7 +197,20 @@ class GitHubUpdateManager {
             val resolveInfoList = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
             for (resolveInfo in resolveInfoList) {
                 val packageName = resolveInfo.activityInfo.packageName
-                context.grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                try {
+                    context.grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {}
+            }
+
+            listOf(
+                "com.google.android.packageinstaller",
+                "com.android.packageinstaller",
+                "com.samsung.android.packageinstaller",
+                "com.miui.packageinstaller"
+            ).forEach { pkg ->
+                try {
+                    context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {}
             }
 
             context.startActivity(intent)
@@ -201,5 +218,14 @@ class GitHubUpdateManager {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    fun openInBrowser(context: Context, url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {}
     }
 }
