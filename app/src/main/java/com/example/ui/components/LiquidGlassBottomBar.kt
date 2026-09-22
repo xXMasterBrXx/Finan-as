@@ -89,11 +89,9 @@ fun LiquidGlassBottomBar(
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     modifier: Modifier = Modifier
 ) {
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val systemDark = isSystemInDarkTheme()
-    val isOled = themeMode == AppThemeMode.DARK_OLED || (themeMode == AppThemeMode.SYSTEM && systemDark && surfaceColor.luminance() < 0.05f)
-    val isDark = themeMode == AppThemeMode.DARK || (themeMode == AppThemeMode.SYSTEM && systemDark && !isOled)
+    val isOled = themeMode == AppThemeMode.DARK_OLED
+    val isDark = themeMode == AppThemeMode.DARK || (themeMode == AppThemeMode.SYSTEM && systemDark)
     val isWarm = themeMode == AppThemeMode.LIGHT_WARM || (themeMode == AppThemeMode.SYSTEM && !systemDark)
 
     val tabs = remember(transactionCount, cardCount) {
@@ -137,8 +135,8 @@ fun LiquidGlassBottomBar(
         )
         isDark -> Brush.verticalGradient(
             listOf(
-                Color(0xFF23272F).copy(alpha = 0.74f),
-                Color(0xFF171A20).copy(alpha = 0.80f)
+                Color(0xFF1E2D40).copy(alpha = 0.82f),
+                Color(0xFF152232).copy(alpha = 0.88f)
             )
         )
         isWarm -> Brush.verticalGradient(

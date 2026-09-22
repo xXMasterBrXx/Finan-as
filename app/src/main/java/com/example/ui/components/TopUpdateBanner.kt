@@ -66,12 +66,12 @@ fun TopUpdateBanner(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-                    .shadow(4.dp, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 2.dp)
+                    .shadow(3.dp, RoundedCornerShape(10.dp))
                     .testTag("top_update_banner"),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 3.dp
+                tonalElevation = 2.dp
             ) {
                 Box(
                     modifier = Modifier
@@ -79,16 +79,16 @@ fun TopUpdateBanner(
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
                                     MaterialTheme.colorScheme.surfaceVariant
                                 )
                             )
                         )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -98,28 +98,31 @@ fun TopUpdateBanner(
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.SystemUpdate,
                                         contentDescription = "Atualização disponível",
                                         tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(15.dp)
+                                        modifier = Modifier.size(13.dp)
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
 
                             Row(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
                                     text = "Nova Versão",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Surface(
@@ -130,10 +133,10 @@ fun TopUpdateBanner(
                                         text = update.latestVersionName,
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp
+                                            fontSize = 9.sp
                                         ),
                                         color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                     )
                                 }
                             }
@@ -141,40 +144,43 @@ fun TopUpdateBanner(
                             if (!isDownloading) {
                                 Button(
                                     onClick = { onUpdateClick(update.downloadUrl) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary
                                     ),
                                     modifier = Modifier
-                                        .height(30.dp)
+                                        .height(26.dp)
                                         .testTag("update_now_button")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.CloudDownload,
                                         contentDescription = null,
-                                        modifier = Modifier.size(13.dp)
+                                        modifier = Modifier.size(11.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
                                     Text(
                                         text = "Atualizar",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
                             }
 
                             IconButton(
                                 onClick = onDismiss,
                                 modifier = Modifier
-                                    .size(26.dp)
+                                    .size(24.dp)
                                     .testTag("dismiss_update_banner_btn")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Fechar aviso",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }
@@ -182,7 +188,7 @@ fun TopUpdateBanner(
                         if (isDownloading) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -191,12 +197,18 @@ fun TopUpdateBanner(
                                 ) {
                                     Text(
                                         text = "Baixando atualização...",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 10.sp
+                                        ),
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         text = "${downloadProgress ?: 0}%",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        ),
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -204,8 +216,8 @@ fun TopUpdateBanner(
                                     progress = { (downloadProgress ?: 0).toFloat() / 100f },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp))
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
                                 )
                             }
                         }

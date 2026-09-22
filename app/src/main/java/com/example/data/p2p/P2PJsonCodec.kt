@@ -23,6 +23,8 @@ object P2PJsonCodec {
             put("totalInstallments", tx.totalInstallments)
             put("installmentGroupId", tx.installmentGroupId ?: JSONObject.NULL)
             put("isAnticipated", tx.isAnticipated)
+            put("isRecurring", tx.isRecurring)
+            put("recurringGroupId", tx.recurringGroupId ?: JSONObject.NULL)
             put("updatedAt", tx.updatedAt)
             put("isDeleted", tx.isDeleted)
         }
@@ -43,6 +45,8 @@ object P2PJsonCodec {
             totalInstallments = json.optInt("totalInstallments", 1),
             installmentGroupId = if (json.isNull("installmentGroupId")) null else json.optString("installmentGroupId"),
             isAnticipated = json.optBoolean("isAnticipated", false),
+            isRecurring = json.optBoolean("isRecurring", false),
+            recurringGroupId = if (json.isNull("recurringGroupId")) null else json.optString("recurringGroupId"),
             updatedAt = json.optLong("updatedAt", System.currentTimeMillis()),
             isDeleted = json.optBoolean("isDeleted", false)
         )

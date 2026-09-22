@@ -94,6 +94,59 @@ class TransactionRepository(
         groupId
     }
 
+    suspend fun createRecurring(
+        title: String,
+        amount: Double,
+        type: TransactionType,
+        category: String,
+        startTimestamp: Long,
+        note: String,
+        cardId: Long?,
+        monthsCount: Int = 12,
+        intervalMonths: Int = 1,
+        isIndefinite: Boolean = true
+    ): String = withContext(Dispatchers.IO) {
+        val groupId = java.util.UUID.randomUUID().toString()
+        val step = intervalMonths.coerceIn(1, 12)
+        val count = if (isIndefinite) 60 else monthsCount.coerceIn(1, 60)
+        val list = mutableListOf<TransactionEntity>()
+        for (i in 0 until count) {
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = startTimestamp
+                add(Calendar.MONTH, i * step)
+            }
+            list.add(
+                TransactionEntity(
+                    title = title.trim(),
+                    amount = amount,
+                    type = type.name,
+                    category = category,
+                    timestamp = cal.timeInMillis,
+                    note = note.trim(),
+                    cardId = if (type == TransactionType.EXPENSE) cardId else null,
+                    isRecurring = true,
+                    recurringGroupId = groupId
+                )
+            )
+        }
+        transactionDao.insertAll(list)
+        list.forEach { p2pSyncManager?.broadcastTransactionUpsert(it) }
+        groupId
+    }
+
+    suspend fun deleteRecurringGroup(groupId: String) = withContext(Dispatchers.IO) {
+        transactionDao.markRecurringGroupDeleted(groupId)
+        p2pSyncManager?.broadcastTransactionDelete(syncUuid = "", groupId = groupId)
+    }
+
+    fun getRecurringByGroup(groupId: String): Flow<List<TransactionEntity>> {
+        return transactionDao.getRecurringByGroup(groupId)
+    }
+
+    suspend fun getRecurringByGroupSync(groupId: String): List<TransactionEntity> = withContext(Dispatchers.IO) {
+        transactionDao.getRecurringByGroupSync(groupId)
+    }
+
     suspend fun anticipateInstallments(
         groupId: String,
         numberOfInstallments: Int,

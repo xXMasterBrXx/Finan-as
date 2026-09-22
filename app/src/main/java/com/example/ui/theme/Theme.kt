@@ -106,14 +106,7 @@ fun MyApplicationTheme(
     val onContainerVal = Color(if (isDark) 0xFFFFFFFF else themeColor.primaryDarkHex)
 
     val baseColorScheme: ColorScheme = when (themeMode) {
-        AppThemeMode.SYSTEM -> {
-            if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val context = LocalContext.current
-                if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            } else {
-                if (systemDark) DarkColorScheme else WarmLightColorScheme
-            }
-        }
+        AppThemeMode.SYSTEM -> if (systemDark) DarkColorScheme else WarmLightColorScheme
         AppThemeMode.LIGHT -> LightColorScheme
         AppThemeMode.LIGHT_WARM -> WarmLightColorScheme
         AppThemeMode.DARK -> DarkColorScheme

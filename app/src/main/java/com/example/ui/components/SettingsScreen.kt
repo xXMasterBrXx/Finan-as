@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -38,10 +40,14 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TrackChanges
@@ -120,6 +126,8 @@ fun SettingsScreen(
     onCreateBackup: () -> Unit = {},
     onRestoreBackup: (java.io.File) -> Unit = {},
     onDeleteBackup: (java.io.File) -> Unit = {},
+    onSaveBackupToUri: ((android.net.Uri) -> Unit)? = null,
+    onRestoreBackupFromUri: ((android.net.Uri) -> Unit)? = null,
     onBackupIntervalChange: (String) -> Unit = {},
     onClearBackupStatusMessage: () -> Unit = {},
     onResetToSampleData: () -> Unit,
@@ -142,6 +150,22 @@ fun SettingsScreen(
     var showAllBackups by remember { mutableStateOf(false) }
     var budgetInput by remember(monthlyBudgetLimit) {
         mutableStateOf(if (monthlyBudgetLimit > 0) String.format(java.util.Locale.US, "%.2f", monthlyBudgetLimit) else "")
+    }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null && onSaveBackupToUri != null) {
+            onSaveBackupToUri(uri)
+        }
+    }
+
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && onRestoreBackupFromUri != null) {
+            onRestoreBackupFromUri(uri)
+        }
     }
 
     Column(
@@ -693,12 +717,43 @@ fun SettingsScreen(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.getDefault()).format(java.util.Date())
+                            createDocumentLauncher.launch("finanflow_backup_$timeStamp.finbackup")
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Exportar Arquivo", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            openDocumentLauncher.launch(arrayOf("*/*"))
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Selecionar Arquivo", fontSize = 12.sp)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Último backup: $lastBackupStr",
+                            text = "Último backup interno: $lastBackupStr",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -709,7 +764,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Fazer Backup")
+                        Text("Criar Backup")
                     }
                 }
 

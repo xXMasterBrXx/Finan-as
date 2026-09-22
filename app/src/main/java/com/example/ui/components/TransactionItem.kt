@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
@@ -46,6 +49,7 @@ import com.example.ui.theme.IncomeGreen
 import com.example.util.CreditCardBillingHelper
 import com.example.util.Formatters
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TransactionItem(
     transaction: TransactionEntity,
@@ -110,10 +114,14 @@ fun TransactionItem(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 2.dp)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp)
                 ) {
+                    // Category Badge
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = categoryItem.color.copy(alpha = 0.12f)
@@ -129,8 +137,37 @@ fun TransactionItem(
                         )
                     }
 
+                    // Recurring Badge
+                    if (transaction.isRecurring) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Autorenew,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "Recorrente",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                    }
+
+                    // Installment Badge
                     if (transaction.isInstallment && transaction.totalInstallments > 1) {
-                        Spacer(modifier = Modifier.width(5.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
@@ -159,7 +196,6 @@ fun TransactionItem(
                     }
 
                     if (transaction.isAnticipated) {
-                        Spacer(modifier = Modifier.width(5.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFFF9800).copy(alpha = 0.18f)
@@ -187,22 +223,43 @@ fun TransactionItem(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    // Date Tag
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ) {
+                        Text(
+                            text = Formatters.formatDate(transaction.timestamp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
 
-                    Text(
-                        text = Formatters.formatDate(transaction.timestamp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
+                    // Card Name Badge with clean contrast and spacing
                     if (!cardName.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        val cardDueText = if (card != null) {
+                            val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(transaction.timestamp, card)
+                            val txCal = java.util.Calendar.getInstance().apply { timeInMillis = transaction.timestamp }
+                            val txYear = txCal.get(java.util.Calendar.YEAR)
+                            val txMonth = txCal.get(java.util.Calendar.MONTH)
+                            val isNextOrLater = (dueYear > txYear) || (dueYear == txYear && dueMonth > txMonth)
+                            if (isNextOrLater) {
+                                val monthNames = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
+                                val dueMonthName = monthNames.getOrElse(dueMonth) { "" }
+                                " • $dueMonthName"
+                            } else ""
+                        } else ""
+
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -213,35 +270,15 @@ fun TransactionItem(
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = cardName,
+                                    text = "$cardName$cardDueText",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontWeight = FontWeight.SemiBold
                                     ),
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-
-                                if (card != null) {
-                                    val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(transaction.timestamp, card)
-                                    val txCal = java.util.Calendar.getInstance().apply { timeInMillis = transaction.timestamp }
-                                    val txYear = txCal.get(java.util.Calendar.YEAR)
-                                    val txMonth = txCal.get(java.util.Calendar.MONTH)
-                                    val isNextOrLater = (dueYear > txYear) || (dueYear == txYear && dueMonth > txMonth)
-
-                                    if (isNextOrLater) {
-                                        val monthNames = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
-                                        val dueMonthName = monthNames.getOrElse(dueMonth) { "" }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "• fatura $dueMonthName",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
                             }
                         }
                     }

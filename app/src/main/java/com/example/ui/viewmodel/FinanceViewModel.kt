@@ -37,7 +37,8 @@ data class CategorySpend(
 
 data class DailySpend(
     val dayOfMonth: Int,
-    val amount: Double
+    val amount: Double,           // Daily expense (vermelho)
+    val incomeAmount: Double = 0.0 // Daily income (verde)
 )
 
 data class MonthPeriod(
@@ -314,6 +315,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val incomeCountByCat = mutableMapOf<String, Int>()
 
         val dailyExpenseMap = mutableMapOf<Int, Double>()
+        val dailyIncomeMap = mutableMapOf<Int, Double>()
 
         val cal = Calendar.getInstance()
         for (item in monthTx) {
@@ -321,6 +323,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 incomeSum += item.amount
                 incomeByCat[item.category] = (incomeByCat[item.category] ?: 0.0) + item.amount
                 incomeCountByCat[item.category] = (incomeCountByCat[item.category] ?: 0) + 1
+
+                cal.timeInMillis = item.timestamp
+                val day = cal.get(Calendar.DAY_OF_MONTH)
+                dailyIncomeMap[day] = (dailyIncomeMap[day] ?: 0.0) + item.amount
             } else {
                 expenseAccrualSum += item.amount
                 expenseByCat[item.category] = (expenseByCat[item.category] ?: 0.0) + item.amount
@@ -398,7 +404,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val dailyList = (1..daysInMonth).map { day ->
             DailySpend(
                 dayOfMonth = day,
-                amount = dailyExpenseMap[day] ?: 0.0
+                amount = dailyExpenseMap[day] ?: 0.0,
+                incomeAmount = dailyIncomeMap[day] ?: 0.0
             )
         }
 
@@ -495,10 +502,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         note: String = "",
         cardId: Long? = null,
         isInstallment: Boolean = false,
-        totalInstallments: Int = 1
+        totalInstallments: Int = 1,
+        isRecurring: Boolean = false,
+        recurringMonths: Int = 12,
+        recurringIntervalMonths: Int = 1,
+        isIndefinite: Boolean = true
     ) {
         viewModelScope.launch {
-            if (isInstallment && totalInstallments > 1 && type == TransactionType.EXPENSE) {
+            if (isRecurring) {
+                repository.createRecurring(
+                    title = title,
+                    amount = amount,
+                    type = type,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    monthsCount = recurringMonths,
+                    intervalMonths = recurringIntervalMonths,
+                    isIndefinite = isIndefinite
+                )
+            } else if (isInstallment && totalInstallments > 1 && type == TransactionType.EXPENSE) {
                 repository.createInstallments(
                     title = title,
                     totalAmount = amount,
@@ -517,10 +541,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                         category = category,
                         timestamp = timestamp,
                         note = note.trim(),
-                        cardId = if (type == TransactionType.EXPENSE) cardId else null
+                        cardId = if (type == TransactionType.EXPENSE) cardId else null,
+                        isRecurring = isRecurring
                     )
                 )
             }
+        }
+    }
+
+    fun deleteRecurringGroup(groupId: String) {
+        viewModelScope.launch {
+            repository.deleteRecurringGroup(groupId)
         }
     }
 
@@ -728,6 +759,32 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 refreshBackupList()
             } else {
                 _backupStatusMessage.value = "Erro ao criar backup: ${result.exceptionOrNull()?.localizedMessage}"
+            }
+        }
+    }
+
+    fun saveBackupToUri(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = backupManager.writeBackupToUri(uri)
+            if (result.isSuccess) {
+                _backupStatusMessage.value = "Backup exportado e salvo com sucesso no celular!"
+            } else {
+                _backupStatusMessage.value = "Erro ao exportar backup: ${result.exceptionOrNull()?.localizedMessage}"
+            }
+        }
+    }
+
+    fun restoreBackupFromUri(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = backupManager.restoreFromUri(uri)
+            if (result.isSuccess) {
+                _backupStatusMessage.value = "Backup restaurado com sucesso a partir do arquivo!"
+                refreshBackupList()
+                if (p2pSyncManager.isSyncActive()) {
+                    p2pSyncManager.triggerFullSyncNow()
+                }
+            } else {
+                _backupStatusMessage.value = "Erro ao restaurar backup do arquivo: ${result.exceptionOrNull()?.localizedMessage}"
             }
         }
     }

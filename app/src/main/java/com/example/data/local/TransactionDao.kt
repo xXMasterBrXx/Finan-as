@@ -49,6 +49,18 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE installmentGroupId = :groupId")
     suspend fun deleteInstallmentGroup(groupId: String)
 
+    @Query("SELECT * FROM transactions WHERE isDeleted = 0 AND isRecurring = 1 ORDER BY timestamp DESC")
+    fun getAllRecurringTransactions(): Flow<List<TransactionEntity>>
+
+    @Query("SELECT * FROM transactions WHERE isDeleted = 0 AND recurringGroupId = :groupId ORDER BY timestamp ASC")
+    fun getRecurringByGroup(groupId: String): Flow<List<TransactionEntity>>
+
+    @Query("SELECT * FROM transactions WHERE isDeleted = 0 AND recurringGroupId = :groupId ORDER BY timestamp ASC")
+    suspend fun getRecurringByGroupSync(groupId: String): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET isDeleted = 1, updatedAt = :updatedAt WHERE recurringGroupId = :groupId")
+    suspend fun markRecurringGroupDeleted(groupId: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("UPDATE transactions SET isDeleted = 1, updatedAt = :updatedAt WHERE installmentGroupId = :groupId")
     suspend fun markInstallmentGroupDeleted(groupId: String, updatedAt: Long = System.currentTimeMillis())
 

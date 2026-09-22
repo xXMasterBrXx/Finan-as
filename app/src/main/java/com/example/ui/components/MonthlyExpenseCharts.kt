@@ -51,8 +51,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -62,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.ExpenseRed
+import com.example.ui.theme.IncomeGreen
 import com.example.ui.theme.NeutralGray
 import com.example.ui.viewmodel.CategorySpend
 import com.example.ui.viewmodel.DailySpend
@@ -468,89 +473,290 @@ private fun DailyTimelineChart(
     dailyExpenses: List<DailySpend>,
     hideBalances: Boolean
 ) {
-    val maxDaily = dailyExpenses.maxOfOrNull { it.amount } ?: 1.0
-    val effectiveMax = if (maxDaily <= 0.0) 1.0 else maxDaily
+    val maxExpense = dailyExpenses.maxOfOrNull { it.amount } ?: 0.0
+    val maxIncome = dailyExpenses.maxOfOrNull { it.incomeAmount } ?: 0.0
+    val highestPeak = maxOf(maxExpense, maxIncome)
+    val effectiveMax = if (highestPeak <= 0.0) 1.0 else highestPeak
+
+    var selectedDayIndex by remember { mutableStateOf<Int?>(null) }
+    val selectedDay = selectedDayIndex?.let { dailyExpenses.getOrNull(it) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("daily_timeline_chart")
     ) {
+        // Legend & Peak Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Gastos por Dia do Mês",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Income Legend (Green)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(IncomeGreen)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Ganhos",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = IncomeGreen
+                    )
+                }
+
+                // Expense Legend (Red)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(ExpenseRed)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Gastos",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = ExpenseRed
+                    )
+                }
+            }
+
             Text(
                 text = "Pico: ${if (hideBalances) "••••••" else Formatters.formatCurrency(effectiveMax)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = ExpenseRed
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (selectedDay != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Dia ${selectedDay.dayOfMonth}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (selectedDay.incomeAmount > 0) {
+                            Text(
+                                text = "+${if (hideBalances) "••••" else Formatters.formatCurrency(selectedDay.incomeAmount)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = IncomeGreen
+                            )
+                        }
+                        if (selectedDay.amount > 0) {
+                            Text(
+                                text = "-${if (hideBalances) "••••" else Formatters.formatCurrency(selectedDay.amount)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = ExpenseRed
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-        // Custom Bar Chart using Canvas
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Custom Multi-Line Chart (Green: Income, Red: Expense)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(150.dp)
         ) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val barCount = dailyExpenses.size
-                if (barCount == 0) return@Canvas
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .pointerInput(dailyExpenses) {
+                        detectTapGestures { offset ->
+                            val count = dailyExpenses.size
+                            if (count > 0) {
+                                val slotW = size.width / count
+                                val clickedIdx = (offset.x / slotW).toInt().coerceIn(0, count - 1)
+                                selectedDayIndex = if (selectedDayIndex == clickedIdx) null else clickedIdx
+                            }
+                        }
+                    }
+            ) {
+                val pointCount = dailyExpenses.size
+                if (pointCount < 2) return@Canvas
 
                 val availableWidth = size.width
-                val slotWidth = availableWidth / barCount
-                val barWidth = (slotWidth * 0.65f).coerceIn(4f, 18f)
+                val chartHeight = size.height - 24f
+                val baselineY = size.height - 12f
+                val slotWidth = availableWidth / (pointCount - 1).coerceAtLeast(1)
 
-                dailyExpenses.forEachIndexed { index, daily ->
-                    val x = index * slotWidth + (slotWidth - barWidth) / 2
-                    val barHeightFraction = (daily.amount / effectiveMax).toFloat().coerceIn(0f, 1f)
-                    val barHeight = (size.height - 24f) * barHeightFraction
-
-                    // Draw baseline guideline
+                // Draw subtle gridlines
+                val gridSteps = 3
+                for (i in 0..gridSteps) {
+                    val y = 12f + (chartHeight / gridSteps) * i
                     drawLine(
-                        color = Color(0x22FFFFFF),
-                        start = Offset(0f, size.height - 20f),
-                        end = Offset(size.width, size.height - 20f),
+                        color = Color.White.copy(alpha = 0.07f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
                         strokeWidth = 1f
                     )
+                }
 
-                    // Draw bar
-                    if (daily.amount > 0) {
-                        val barColor = if (daily.amount == effectiveMax && effectiveMax > 0) {
-                            ExpenseRed
-                        } else {
-                            Color(0xFF38BDF8)
-                        }
+                // Compute points
+                val expensePoints = dailyExpenses.mapIndexed { index, daily ->
+                    val x = index * slotWidth
+                    val fraction = (daily.amount / effectiveMax).toFloat().coerceIn(0f, 1f)
+                    val y = baselineY - (fraction * (chartHeight - 12f))
+                    Offset(x, y)
+                }
 
-                        drawRoundRect(
-                            color = barColor,
-                            topLeft = Offset(x, size.height - 20f - barHeight),
-                            size = Size(barWidth, barHeight.coerceAtLeast(4f)),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f)
-                        )
-                    } else {
-                        // Small dot for inactive day
+                val incomePoints = dailyExpenses.mapIndexed { index, daily ->
+                    val x = index * slotWidth
+                    val fraction = (daily.incomeAmount / effectiveMax).toFloat().coerceIn(0f, 1f)
+                    val y = baselineY - (fraction * (chartHeight - 12f))
+                    Offset(x, y)
+                }
+
+                // Helper to create smooth path
+                fun buildPath(points: List<Offset>): Path {
+                    val path = Path()
+                    if (points.isEmpty()) return path
+                    path.moveTo(points.first().x, points.first().y)
+                    for (i in 0 until points.size - 1) {
+                        val p0 = points[i]
+                        val p1 = points[i + 1]
+                        val cx = (p0.x + p1.x) / 2f
+                        path.cubicTo(cx, p0.y, cx, p1.y, p1.x, p1.y)
+                    }
+                    return path
+                }
+
+                val expensePath = buildPath(expensePoints)
+                val incomePath = buildPath(incomePoints)
+
+                // Fill area under Income Line (Green Gradient)
+                val incomeFillPath = Path().apply {
+                    addPath(incomePath)
+                    lineTo(size.width, baselineY)
+                    lineTo(0f, baselineY)
+                    close()
+                }
+                drawPath(
+                    path = incomeFillPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(IncomeGreen.copy(alpha = 0.18f), IncomeGreen.copy(alpha = 0.0f)),
+                        startY = 0f,
+                        endY = baselineY
+                    ),
+                    style = Fill
+                )
+
+                // Fill area under Expense Line (Red Gradient)
+                val expenseFillPath = Path().apply {
+                    addPath(expensePath)
+                    lineTo(size.width, baselineY)
+                    lineTo(0f, baselineY)
+                    close()
+                }
+                drawPath(
+                    path = expenseFillPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(ExpenseRed.copy(alpha = 0.15f), ExpenseRed.copy(alpha = 0.0f)),
+                        startY = 0f,
+                        endY = baselineY
+                    ),
+                    style = Fill
+                )
+
+                // Draw Income Line (Green)
+                drawPath(
+                    path = incomePath,
+                    color = IncomeGreen,
+                    style = Stroke(
+                        width = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+
+                // Draw Expense Line (Red)
+                drawPath(
+                    path = expensePath,
+                    color = ExpenseRed,
+                    style = Stroke(
+                        width = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+
+                // Draw Data Dots for Income
+                dailyExpenses.forEachIndexed { index, daily ->
+                    if (daily.incomeAmount > 0) {
+                        val pt = incomePoints[index]
                         drawCircle(
-                            color = Color(0x3394A3B8),
-                            radius = 2f,
-                            center = Offset(x + barWidth / 2, size.height - 20f)
+                            color = Color.White,
+                            radius = 4.dp.toPx(),
+                            center = pt
+                        )
+                        drawCircle(
+                            color = IncomeGreen,
+                            radius = 2.5.dp.toPx(),
+                            center = pt
+                        )
+                    }
+                }
+
+                // Draw Data Dots for Expense
+                dailyExpenses.forEachIndexed { index, daily ->
+                    if (daily.amount > 0) {
+                        val pt = expensePoints[index]
+                        drawCircle(
+                            color = Color.White,
+                            radius = 4.dp.toPx(),
+                            center = pt
+                        )
+                        drawCircle(
+                            color = ExpenseRed,
+                            radius = 2.5.dp.toPx(),
+                            center = pt
+                        )
+                    }
+                }
+
+                // Highlight selected day indicator
+                selectedDayIndex?.let { idx ->
+                    if (idx in dailyExpenses.indices) {
+                        val x = idx * slotWidth
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.4f),
+                            start = Offset(x, 0f),
+                            end = Offset(x, baselineY),
+                            strokeWidth = 1.5.dp.toPx()
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Indicator Labels: Dia 1, Dia 10, Dia 20, Dia 30
+        // Indicator Labels: Dia 1, Dia 10, Dia 20, Fim do Mês
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween

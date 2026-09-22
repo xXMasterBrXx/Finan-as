@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
@@ -98,7 +99,11 @@ fun TransactionDialog(
         note: String,
         cardId: Long?,
         isInstallment: Boolean,
-        totalInstallments: Int
+        totalInstallments: Int,
+        isRecurring: Boolean,
+        recurringMonths: Int,
+        recurringIntervalMonths: Int,
+        isIndefinite: Boolean
     ) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -124,6 +129,10 @@ fun TransactionDialog(
 
     var isInstallment by remember { mutableStateOf(transactionToEdit?.isInstallment ?: false) }
     var totalInstallments by remember { mutableIntStateOf(if ((transactionToEdit?.totalInstallments ?: 1) > 1) transactionToEdit!!.totalInstallments else 2) }
+    var isRecurring by remember { mutableStateOf(transactionToEdit?.isRecurring ?: false) }
+    var isIndefiniteRecurring by remember { mutableStateOf(true) }
+    var recurringIntervalMonths by remember { mutableIntStateOf(1) }
+    var recurringMonths by remember { mutableIntStateOf(12) }
 
     val typeCustom = customCategories.filter { it.type == selectedType }
     val categories = if (selectedType == TransactionType.INCOME) {
@@ -502,7 +511,7 @@ fun TransactionDialog(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Parcelamento Section for Expenses (only when creating new or if already installment)
-            if (selectedType == TransactionType.EXPENSE && transactionToEdit == null) {
+            if (selectedType == TransactionType.EXPENSE && transactionToEdit == null && !isRecurring) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -536,7 +545,7 @@ fun TransactionDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Lançar automaticamente nos meses posteriores",
+                                        text = "Dividir valor em parcelas nos meses posteriores",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -545,7 +554,10 @@ fun TransactionDialog(
 
                             Switch(
                                 checked = isInstallment,
-                                onCheckedChange = { isInstallment = it },
+                                onCheckedChange = { 
+                                    isInstallment = it 
+                                    if (it) isRecurring = false
+                                },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = MaterialTheme.colorScheme.primary,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
@@ -674,6 +686,183 @@ fun TransactionDialog(
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
+            // Gastos / Receitas Recorrentes (Fixo mensal)
+            if (transactionToEdit == null && !isInstallment) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isRecurring) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = if (isRecurring) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = if (selectedType == TransactionType.EXPENSE) "Gasto Fixo / Recorrente" else "Entrada Recorrente",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Repetir todo mês (ex: Aluguel, Assinaturas, Salário)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = isRecurring,
+                                onCheckedChange = { 
+                                    isRecurring = it 
+                                    if (it) isInstallment = false
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.secondary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+                                ),
+                                modifier = Modifier.testTag("recurring_switch")
+                            )
+                        }
+
+                        if (isRecurring) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Frequência da cobrança (Regularidade)
+                            Text(
+                                text = "Frequência / Regularidade:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            val intervals = listOf(
+                                1 to "Mensal (Todo mês)",
+                                2 to "A cada 2 meses (Bimestral)",
+                                3 to "A cada 3 meses (Trimestral)",
+                                6 to "A cada 6 meses (Semestral)",
+                                12 to "A cada 12 meses (Anual)"
+                            )
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                intervals.forEach { (interval, label) ->
+                                    val isSelected = recurringIntervalMonths == interval
+                                    Surface(
+                                        onClick = { recurringIntervalMonths = interval },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.testTag("recurring_interval_${interval}m")
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
+                                            ),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Duração da Recorrência
+                            Text(
+                                text = "Duração da Recorrência:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Opção Indefinido
+                                val isIndefiniteSelected = isIndefiniteRecurring
+                                Surface(
+                                    onClick = { isIndefiniteRecurring = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isIndefiniteSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.testTag("recurring_chip_indefinite")
+                                ) {
+                                    Text(
+                                        text = "Indefinido (Sempre)",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (isIndefiniteSelected) FontWeight.ExtraBold else FontWeight.Medium
+                                        ),
+                                        color = if (isIndefiniteSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+
+                                listOf(3, 6, 12, 24, 36).forEach { count ->
+                                    val isSelected = !isIndefiniteRecurring && recurringMonths == count
+                                    Surface(
+                                        onClick = {
+                                            isIndefiniteRecurring = false
+                                            recurringMonths = count
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.testTag("recurring_chip_${count}x")
+                                    ) {
+                                        Text(
+                                            text = "$count ${if (recurringIntervalMonths == 1) "meses" else "vezes"}",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
+                                            ),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (isIndefiniteRecurring) {
+                                    "Cobrado continuamente ${if (recurringIntervalMonths == 1) "todo mês" else "a cada $recurringIntervalMonths meses"} indefinidamente."
+                                } else {
+                                    "Serão gerados $recurringMonths lançamentos ${if (recurringIntervalMonths == 1) "mensais" else "a cada $recurringIntervalMonths meses"}."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+
             // Note Input (Optional)
             OutlinedTextField(
                 value = note,
@@ -707,7 +896,11 @@ fun TransactionDialog(
                             note.trim(),
                             if (selectedType == TransactionType.EXPENSE) selectedCardId else null,
                             isInstallment && selectedType == TransactionType.EXPENSE,
-                            if (isInstallment && selectedType == TransactionType.EXPENSE) totalInstallments else 1
+                            if (isInstallment && selectedType == TransactionType.EXPENSE) totalInstallments else 1,
+                            isRecurring,
+                            recurringMonths,
+                            recurringIntervalMonths,
+                            isIndefiniteRecurring
                         )
                         onDismiss()
                     }
@@ -723,7 +916,17 @@ fun TransactionDialog(
             ) {
                 Text(
                     text = if (transactionToEdit == null) {
-                        if (isInstallment && selectedType == TransactionType.EXPENSE) "Criar Compra Parcelada (${totalInstallments}x)" else "Salvar Lançamento"
+                        if (isRecurring) {
+                            if (isIndefiniteRecurring) {
+                                "Salvar ${if (selectedType == TransactionType.EXPENSE) "Gasto" else "Receita"} Recorrente (Indefinido)"
+                            } else {
+                                "Salvar ${if (selectedType == TransactionType.EXPENSE) "Gasto" else "Receita"} Recorrente (${recurringMonths}x)"
+                            }
+                        } else if (isInstallment && selectedType == TransactionType.EXPENSE) {
+                            "Criar Compra Parcelada (${totalInstallments}x)"
+                        } else {
+                            "Salvar Lançamento"
+                        }
                     } else "Atualizar Lançamento",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White

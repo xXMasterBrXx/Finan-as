@@ -20,6 +20,8 @@ data class TransactionEntity(
     val totalInstallments: Int = 1,
     val installmentGroupId: String? = null,
     val isAnticipated: Boolean = false,
+    val isRecurring: Boolean = false,
+    val recurringGroupId: String? = null,
     val syncUuid: String = UUID.randomUUID().toString(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false

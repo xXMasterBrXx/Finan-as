@@ -478,6 +478,8 @@ fun FinanceApp(
                             onCreateBackup = { viewModel.createManualBackup() },
                             onRestoreBackup = { viewModel.restoreBackup(it) },
                             onDeleteBackup = { viewModel.deleteBackup(it) },
+                            onSaveBackupToUri = { uri -> viewModel.saveBackupToUri(uri) },
+                            onRestoreBackupFromUri = { uri -> viewModel.restoreBackupFromUri(uri) },
                             onBackupIntervalChange = { viewModel.setBackupInterval(it) },
                             onClearBackupStatusMessage = { viewModel.clearBackupStatusMessage() },
                             onResetToSampleData = { viewModel.resetToSampleData() },
@@ -595,7 +597,7 @@ fun FinanceApp(
                 categoryDialogType = cat.type
                 showCategoryDialog = true
             },
-            onSave = { title, amount, type, category, timestamp, note, cardId, isInstallment, totalInstallments ->
+            onSave = { title, amount, type, category, timestamp, note, cardId, isInstallment, totalInstallments, isRecurring, recurringMonths, recurringIntervalMonths, isIndefinite ->
                 val editing = transactionToEdit
                 if (editing != null) {
                     viewModel.updateTransaction(
@@ -619,7 +621,11 @@ fun FinanceApp(
                         note = note,
                         cardId = cardId,
                         isInstallment = isInstallment,
-                        totalInstallments = totalInstallments
+                        totalInstallments = totalInstallments,
+                        isRecurring = isRecurring,
+                        recurringMonths = recurringMonths,
+                        recurringIntervalMonths = recurringIntervalMonths,
+                        isIndefinite = isIndefinite
                     )
                 }
                 showAddDialog = false

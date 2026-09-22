@@ -1,6 +1,7 @@
 package com.example.data.backup
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import com.example.data.local.AppDatabase
 import com.example.data.local.CreditCardEntity
@@ -13,8 +14,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.security.MessageDigest
 import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 import java.text.SimpleDateFormat
@@ -29,54 +32,74 @@ class LocalBackupManager(
     private val backupDir: File
         get() = File(context.filesDir, "backups").apply { if (!exists()) mkdirs() }
 
-    private fun getOrCreateSecretKey(): SecretKey {
+    // Universal deterministic master key so backup files survive fresh app reinstalls across devices
+    private fun getUniversalSecretKey(): SecretKey {
+        val masterSecret = "FinanFlow_Secure_Backup_Master_Key_v2026_Unified"
+        val sha = MessageDigest.getInstance("SHA-256")
+        val keyBytes = sha.digest(masterSecret.toByteArray(Charsets.UTF_8))
+        return SecretKeySpec(keyBytes, "AES")
+    }
+
+    private fun getLegacySecretKey(): SecretKey? {
         val prefKey = "local_backup_aes_key"
         val existing = userPreferences.getString(prefKey, "")
-        if (!existing.isNullOrBlank()) {
-            val decoded = Base64.decode(existing, Base64.NO_WRAP)
-            return SecretKeySpec(decoded, 0, decoded.size, "AES")
-        } else {
-            val keyGen = KeyGenerator.getInstance("AES")
-            keyGen.init(128)
-            val key = keyGen.generateKey()
-            val encoded = Base64.encodeToString(key.encoded, Base64.NO_WRAP)
-            userPreferences.setString(prefKey, encoded)
-            return key
+        return if (!existing.isNullOrBlank()) {
+            try {
+                val decoded = Base64.decode(existing, Base64.NO_WRAP)
+                SecretKeySpec(decoded, 0, decoded.size, "AES")
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+    }
+
+    suspend fun generateBackupJson(): String = withContext(Dispatchers.IO) {
+        val txs = database.transactionDao().getAllRawTransactions()
+        val cards = database.creditCardDao().getAllRawCards()
+        val cats = database.customCategoryDao().getAllRawCategories()
+
+        val root = JSONObject().apply {
+            put("version", 2)
+            put("timestamp", System.currentTimeMillis())
+            put("budgetLimit", userPreferences.monthlyBudgetLimit.value)
+            put("currency", userPreferences.defaultCurrency.value)
+            put("themeMode", userPreferences.themeMode.value.name)
+
+            val txArray = JSONArray()
+            txs.forEach { txArray.put(P2PJsonCodec.transactionToJson(it)) }
+            put("transactions", txArray)
+
+            val cardArray = JSONArray()
+            cards.forEach { cardArray.put(P2PJsonCodec.cardToJson(it)) }
+            put("cards", cardArray)
+
+            val catArray = JSONArray()
+            cats.forEach { catArray.put(P2PJsonCodec.categoryToJson(it)) }
+            put("categories", catArray)
+        }
+        root.toString()
+    }
+
+    suspend fun createBackupBytes(): Result<ByteArray> = withContext(Dispatchers.IO) {
+        try {
+            val jsonString = generateBackupJson()
+            val secretKey = getUniversalSecretKey()
+            val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+            val encrypted = cipher.doFinal(jsonString.toByteArray(Charsets.UTF_8))
+            Result.success(encrypted)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
     suspend fun createBackup(): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val txs = database.transactionDao().getAllRawTransactions()
-            val cards = database.creditCardDao().getAllRawCards()
-            val cats = database.customCategoryDao().getAllRawCategories()
-
-            val root = JSONObject().apply {
-                put("version", 1)
-                put("timestamp", System.currentTimeMillis())
-                put("budgetLimit", userPreferences.monthlyBudgetLimit.value)
-                put("currency", userPreferences.defaultCurrency.value)
-                put("themeMode", userPreferences.themeMode.value.name)
-
-                val txArray = JSONArray()
-                txs.forEach { txArray.put(P2PJsonCodec.transactionToJson(it)) }
-                put("transactions", txArray)
-
-                val cardArray = JSONArray()
-                cards.forEach { cardArray.put(P2PJsonCodec.cardToJson(it)) }
-                put("cards", cardArray)
-
-                val catArray = JSONArray()
-                cats.forEach { catArray.put(P2PJsonCodec.categoryToJson(it)) }
-                put("categories", catArray)
+            val bytesResult = createBackupBytes()
+            if (bytesResult.isFailure) {
+                return@withContext Result.failure(bytesResult.exceptionOrNull() ?: Exception("Erro ao gerar backup"))
             }
-
-            val jsonString = root.toString()
-            val secretKey = getOrCreateSecretKey()
-            val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val encrypted = cipher.doFinal(jsonString.toByteArray(Charsets.UTF_8))
-
+            val encrypted = bytesResult.getOrThrow()
             val timeStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val file = File(backupDir, "finanflow_backup_$timeStr.finbackup")
             file.writeBytes(encrypted)
@@ -97,14 +120,56 @@ class LocalBackupManager(
         }
     }
 
-    suspend fun restoreBackup(file: File): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun writeBackupToUri(uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val encryptedBytes = file.readBytes()
-            val secretKey = getOrCreateSecretKey()
+            val bytesResult = createBackupBytes()
+            if (bytesResult.isFailure) {
+                return@withContext Result.failure(bytesResult.exceptionOrNull() ?: Exception("Erro ao gerar backup"))
+            }
+            val encrypted = bytesResult.getOrThrow()
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(encrypted)
+                outputStream.flush()
+            } ?: return@withContext Result.failure(Exception("Não foi possível abrir o destino para salvar o arquivo"))
+
+            userPreferences.setLastBackupTimestamp(System.currentTimeMillis())
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun decryptPayload(encryptedBytes: ByteArray): String {
+        // Try with universal master key first
+        try {
+            val secretKey = getUniversalSecretKey()
             val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
             cipher.init(Cipher.DECRYPT_MODE, secretKey)
             val decryptedBytes = cipher.doFinal(encryptedBytes)
-            val jsonString = String(decryptedBytes, Charsets.UTF_8)
+            return String(decryptedBytes, Charsets.UTF_8)
+        } catch (e: Exception) {
+            // Try with legacy key if available
+            val legacyKey = getLegacySecretKey()
+            if (legacyKey != null) {
+                val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
+                cipher.init(Cipher.DECRYPT_MODE, legacyKey)
+                val decryptedBytes = cipher.doFinal(encryptedBytes)
+                return String(decryptedBytes, Charsets.UTF_8)
+            }
+            throw e
+        }
+    }
+
+    suspend fun restoreFromBytes(encryptedBytes: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (encryptedBytes.isEmpty()) {
+                return@withContext Result.failure(Exception("O arquivo de backup está vazio"))
+            }
+            val jsonString = try {
+                decryptPayload(encryptedBytes)
+            } catch (e: Exception) {
+                return@withContext Result.failure(Exception("Arquivo de backup inválido ou não compatível com o FinanFlow"))
+            }
 
             val root = JSONObject(jsonString)
 
@@ -149,6 +214,26 @@ class LocalBackupManager(
             if (cats.isNotEmpty()) database.customCategoryDao().insertCategories(cats)
 
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreBackup(file: File): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val encryptedBytes = file.readBytes()
+            restoreFromBytes(encryptedBytes)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreFromUri(uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: return@withContext Result.failure(Exception("Não foi possível acessar o arquivo selecionado"))
+            val bytes = inputStream.use { it.readBytes() }
+            restoreFromBytes(bytes)
         } catch (e: Exception) {
             Result.failure(e)
         }
