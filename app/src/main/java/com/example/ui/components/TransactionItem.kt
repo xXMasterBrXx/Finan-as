@@ -36,12 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.CreditCardEntity
 import com.example.data.local.TransactionEntity
 import com.example.data.model.Categories
 import com.example.data.model.CategoryItem
 import com.example.data.model.TransactionType
 import com.example.ui.theme.ExpenseRed
 import com.example.ui.theme.IncomeGreen
+import com.example.util.CreditCardBillingHelper
 import com.example.util.Formatters
 
 @Composable
@@ -52,6 +54,7 @@ fun TransactionItem(
     onAnticipate: ((TransactionEntity) -> Unit)? = null,
     hideBalances: Boolean = false,
     cardName: String? = null,
+    card: CreditCardEntity? = null,
     customCategories: List<CategoryItem> = emptyList(),
     modifier: Modifier = Modifier
 ) {
@@ -217,6 +220,28 @@ fun TransactionItem(
                                     ),
                                     color = MaterialTheme.colorScheme.secondary
                                 )
+
+                                if (card != null) {
+                                    val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(transaction.timestamp, card)
+                                    val txCal = java.util.Calendar.getInstance().apply { timeInMillis = transaction.timestamp }
+                                    val txYear = txCal.get(java.util.Calendar.YEAR)
+                                    val txMonth = txCal.get(java.util.Calendar.MONTH)
+                                    val isNextOrLater = (dueYear > txYear) || (dueYear == txYear && dueMonth > txMonth)
+
+                                    if (isNextOrLater) {
+                                        val monthNames = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
+                                        val dueMonthName = monthNames.getOrElse(dueMonth) { "" }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "• fatura $dueMonthName",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

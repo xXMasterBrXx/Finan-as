@@ -256,5 +256,9 @@ class TransactionRepository(
             transactionDao.insertAll(sampleTransactions)
         }
     }
+
+    suspend fun updateCategoryName(oldCategory: String, newCategory: String, type: String) = withContext(Dispatchers.IO) {
+        transactionDao.updateCategoryName(oldCategory, newCategory, type)
+    }
 }
 

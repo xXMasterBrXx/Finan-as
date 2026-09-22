@@ -208,6 +208,7 @@ fun TransactionList(
                         onAnticipate = onAnticipateTransaction,
                         hideBalances = hideBalances,
                         cardName = matchedCard?.name,
+                        card = matchedCard,
                         customCategories = customCategories
                     )
                 }

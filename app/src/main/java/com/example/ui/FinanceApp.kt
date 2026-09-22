@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
@@ -378,6 +380,7 @@ fun FinanceApp(
                                         onAnticipate = openAnticipateModal,
                                         hideBalances = hideBalances,
                                         cardName = matchedCard?.name,
+                                        card = matchedCard,
                                         customCategories = customCategories
                                     )
                                 }
@@ -458,6 +461,11 @@ fun FinanceApp(
                                 categoryToEdit = null
                                 showCategoryDialog = true
                             },
+                            onEditCategory = { cat ->
+                                categoryToEdit = cat
+                                categoryDialogType = cat.type
+                                showCategoryDialog = true
+                            },
                             onDeleteCategory = { id ->
                                 viewModel.deleteCategory(id)
                             },
@@ -491,7 +499,25 @@ fun FinanceApp(
             }
         }
 
-        // Floating Action Button & Liquid Glass Bottom Bar (Overlayed without background strip)
+        // Apple-style Frosted Glass Backdrop Diffusion for content scrolling behind the bar
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(100.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.40f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.80f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+        )
+
+        // Floating Action Button & Liquid Glass Bottom Bar
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -562,6 +588,11 @@ fun FinanceApp(
             onAddNewCategory = { type ->
                 categoryDialogType = type
                 categoryToEdit = null
+                showCategoryDialog = true
+            },
+            onEditCategory = { cat ->
+                categoryToEdit = cat
+                categoryDialogType = cat.type
                 showCategoryDialog = true
             },
             onSave = { title, amount, type, category, timestamp, note, cardId, isInstallment, totalInstallments ->
@@ -674,7 +705,8 @@ fun FinanceApp(
                         name = name,
                         type = type,
                         iconName = iconName,
-                        colorHex = colorHex
+                        colorHex = colorHex,
+                        oldName = editing.name
                     )
                 } else {
                     viewModel.addCategory(

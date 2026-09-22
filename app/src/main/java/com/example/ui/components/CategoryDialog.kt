@@ -1,8 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,19 +68,38 @@ fun CategoryDialog(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var name by remember { mutableStateOf(categoryToEdit?.name ?: "") }
-    var selectedType by remember {
+    var name by remember(categoryToEdit) { mutableStateOf(categoryToEdit?.name ?: "") }
+    var selectedType by remember(categoryToEdit, initialType) {
         mutableStateOf(categoryToEdit?.type ?: initialType)
     }
-    var selectedIconName by remember {
+    var selectedIconName by remember(categoryToEdit, initialType) {
         mutableStateOf(categoryToEdit?.iconName ?: if (selectedType == TransactionType.INCOME) "payments" else "shopping_bag")
     }
-    var selectedColorHex by remember {
+    var selectedColorHex by remember(categoryToEdit, initialType) {
         mutableStateOf(categoryToEdit?.colorHex ?: if (selectedType == TransactionType.INCOME) "#43A047" else "#EF5350")
     }
     var nameError by remember { mutableStateOf(false) }
 
-    val iconKeys = remember { CategoryIconHelper.availableIcons.keys.toList() }
+    var iconSearchQuery by remember { mutableStateOf("") }
+    var selectedIconGroup by remember { mutableStateOf("Todos") }
+    val iconGroups = remember {
+        listOf("Todos", "Finanças", "Alimentação", "Transporte", "Compras", "Casa & Família", "Saúde & Lazer", "Trabalho & Outros")
+    }
+
+    val filteredIcons = remember(iconSearchQuery, selectedIconGroup) {
+        CategoryIconHelper.iconList.filter { item ->
+            val matchesGroup = (selectedIconGroup == "Todos" || item.group == selectedIconGroup)
+            val matchesSearch = if (iconSearchQuery.isBlank()) true else {
+                val q = iconSearchQuery.trim().lowercase()
+                item.label.lowercase().contains(q) ||
+                item.key.lowercase().contains(q) ||
+                item.keywords.lowercase().contains(q) ||
+                item.group.lowercase().contains(q)
+            }
+            matchesGroup && matchesSearch
+        }
+    }
+
     val colorList = remember { CategoryIconHelper.availableColors }
 
     ModalBottomSheet(
@@ -211,47 +234,157 @@ fun CategoryDialog(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Icon Selector
-            Text(
-                text = "Ícone",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            val currentSelectedIconInfo = remember(selectedIconName) {
+                CategoryIconHelper.iconList.find { it.key == selectedIconName }
+            }
+            val themeColor = CategoryIconHelper.parseColor(selectedColorHex)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Ícone (${CategoryIconHelper.iconList.size} disponíveis)",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (currentSelectedIconInfo != null) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = themeColor.copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, themeColor.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = currentSelectedIconInfo.vector,
+                                contentDescription = null,
+                                tint = themeColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = currentSelectedIconInfo.label,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = themeColor
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Icon Search
+            OutlinedTextField(
+                value = iconSearchQuery,
+                onValueChange = { iconSearchQuery = it },
+                placeholder = { Text("Buscar ícone (ex: café, uber, pix, mercado...)", fontSize = 13.sp) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Buscar",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    if (iconSearchQuery.isNotEmpty()) {
+                        IconButton(onClick = { iconSearchQuery = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Limpar busca",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("category_icon_search_input")
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Category Group Filter Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                iconKeys.forEach { iconKey ->
-                    val vector = CategoryIconHelper.getIcon(iconKey)
-                    val isSelected = selectedIconName == iconKey
-                    val themeColor = CategoryIconHelper.parseColor(selectedColorHex)
-
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) themeColor.copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                            )
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) themeColor else Color.Transparent,
-                                shape = CircleShape
-                            )
-                            .clickable { selectedIconName = iconKey }
-                            .testTag("category_icon_$iconKey"),
-                        contentAlignment = Alignment.Center
+                iconGroups.forEach { group ->
+                    val isGroupSelected = (selectedIconGroup == group)
+                    Surface(
+                        onClick = { selectedIconGroup = group },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isGroupSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        contentColor = if (isGroupSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ) {
-                        Icon(
-                            imageVector = vector,
-                            contentDescription = iconKey,
-                            tint = if (isSelected) themeColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
+                        Text(
+                            text = group,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isGroupSelected) FontWeight.Bold else FontWeight.Normal),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Icons Flow
+            if (filteredIcons.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Nenhum ícone encontrado para \"$iconSearchQuery\"",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    filteredIcons.forEach { item ->
+                        val isSelected = selectedIconName == item.key
+
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) themeColor.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                )
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) themeColor else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable { selectedIconName = item.key }
+                                .testTag("category_icon_${item.key}"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = item.vector,
+                                contentDescription = item.label,
+                                tint = if (isSelected) themeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }

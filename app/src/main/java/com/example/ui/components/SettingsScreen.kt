@@ -2,9 +2,10 @@ package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,6 +109,7 @@ fun SettingsScreen(
     onHideBalancesChange: (Boolean) -> Unit,
     customCategories: List<CategoryItem> = emptyList(),
     onAddNewCategory: (TransactionType) -> Unit = {},
+    onEditCategory: (CategoryItem) -> Unit = {},
     onDeleteCategory: (Long) -> Unit = {},
     p2pSyncStatus: P2PSyncStatus? = null,
     onOpenP2PSync: () -> Unit = {},
@@ -545,6 +547,7 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .clickable { onEditCategory(cat) }
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -582,16 +585,34 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { onDeleteCategory(cat.dbId) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Excluir Categoria",
-                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { onEditCategory(cat) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .testTag("edit_category_${cat.dbId}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Editar Categoria",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { onDeleteCategory(cat.dbId) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .testTag("delete_category_${cat.dbId}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Excluir Categoria",
+                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

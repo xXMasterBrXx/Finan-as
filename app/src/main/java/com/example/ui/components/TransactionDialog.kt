@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
@@ -87,6 +88,7 @@ fun TransactionDialog(
     initialCardId: Long? = null,
     onDismiss: () -> Unit,
     onAddNewCategory: ((TransactionType) -> Unit)? = null,
+    onEditCategory: ((CategoryItem) -> Unit)? = null,
     onSave: (
         title: String,
         amount: Double,
@@ -338,6 +340,26 @@ fun TransactionDialog(
                                 ),
                                 color = if (isSelected) cat.color else MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
+                            if (cat.dbId > 0 && onEditCategory != null) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .clickable { onEditCategory(cat) }
+                                        .padding(2.dp)
+                                        .testTag("edit_custom_cat_chip_${cat.dbId}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Editar ${cat.name}",
+                                        tint = if (isSelected) cat.color else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

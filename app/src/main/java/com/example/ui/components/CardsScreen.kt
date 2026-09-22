@@ -406,7 +406,9 @@ fun CardsScreen(
                             transaction = tx,
                             onEdit = onEditTransaction,
                             onDelete = onDeleteTransaction,
-                            hideBalances = hideBalances
+                            hideBalances = hideBalances,
+                            cardName = activeCardItem.card.name,
+                            card = activeCardItem.card
                         )
                     }
                 }

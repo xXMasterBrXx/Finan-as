@@ -15,6 +15,7 @@ import com.example.data.preferences.UserPreferences
 import com.example.data.repository.CategoryRepository
 import com.example.data.repository.CreditCardRepository
 import com.example.data.repository.TransactionRepository
+import com.example.util.CreditCardBillingHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -80,12 +81,17 @@ data class MonthPeriod(
 
 data class MonthlyAnalytics(
     val totalIncome: Double = 0.0,
-    val totalExpense: Double = 0.0,
-    val balance: Double = 0.0,
+    val totalExpense: Double = 0.0,           // Total gasto competência (o que gastou no mês)
+    val totalCashOutflow: Double = 0.0,       // Total saído de fato no mês (dinheiro/débito + faturas de cartão pagas no mês)
+    val previousBalance: Double = 0.0,        // Saldo acumulado dos meses anteriores
+    val balance: Double = 0.0,                // Saldo operacional do mês atual (entradas - saídas de fato)
+    val accumulatedBalance: Double = 0.0,     // Saldo final acumulado (previousBalance + balance)
+    val accrualBalance: Double = 0.0,         // Balanço de competência (entradas - total gasto)
     val savingsRate: Float = 0f,
     val categoryExpenses: List<CategorySpend> = emptyList(),
     val categoryIncomes: List<CategorySpend> = emptyList(),
-    val dailyExpenses: List<DailySpend> = emptyList()
+    val dailyExpenses: List<DailySpend> = emptyList(),
+    val pendingCardExpenses: Double = 0.0     // Gastos no cartão deste mês cuja fatura sairá nos meses seguintes
 )
 
 class FinanceViewModel(application: Application) : AndroidViewModel(application) {
@@ -249,14 +255,57 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Analytics state computed automatically from monthly transactions
+    // All raw transactions flow for cross-month calculations (carry-over and card payment dates)
+    val allTransactions: StateFlow<List<TransactionEntity>> = repository.allTransactions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Analytics state computed automatically with carry-over and cash outflow vs accrual
     val monthlyAnalytics: StateFlow<MonthlyAnalytics> = combine(
+        allTransactions,
         monthlyTransactions,
         _currentPeriod,
-        customCategories
-    ) { transactions, period, customCats ->
+        customCategories,
+        creditCards
+    ) { allTx, monthTx, period, customCats, cards ->
+        val cardMap = cards.associateBy { it.id }
+
+        // 1. Calculate Carry-over (Saldo Anterior Acumulado de todos os meses antes de period.startEpoch)
+        // Regra de saída de dinheiro:
+        // - Se for receita (INCOME): entra na data da transação
+        // - Se for despesa (EXPENSE):
+        //     - Se for em cartão de crédito (cardId != null e card encontrado): o dinheiro sai no mês/ano do vencimento da fatura
+        //     - Se for à vista/dinheiro/débito (sem cartão): o dinheiro sai na data da transação
+        var historicalIncomeBefore = 0.0
+        var historicalOutflowBefore = 0.0
+
+        for (tx in allTx) {
+            if (tx.isDeleted) continue
+
+            if (tx.type == TransactionType.INCOME.name) {
+                if (tx.timestamp < period.startEpoch) {
+                    historicalIncomeBefore += tx.amount
+                }
+            } else {
+                val card = tx.cardId?.let { cardMap[it] }
+                if (card != null) {
+                    val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(tx.timestamp, card)
+                    // Verifica se a fatura venceu antes do mês atual
+                    if (dueYear < period.year || (dueYear == period.year && dueMonth < period.month)) {
+                        historicalOutflowBefore += tx.amount
+                    }
+                } else {
+                    if (tx.timestamp < period.startEpoch) {
+                        historicalOutflowBefore += tx.amount
+                    }
+                }
+            }
+        }
+        val previousBalance = historicalIncomeBefore - historicalOutflowBefore
+
+        // 2. Transações e gastos deste mês (Competência / O que gastou no mês)
         var incomeSum = 0.0
-        var expenseSum = 0.0
+        var expenseAccrualSum = 0.0
+        var pendingCardExpensesSum = 0.0
 
         val expenseByCat = mutableMapOf<String, Double>()
         val expenseCountByCat = mutableMapOf<String, Int>()
@@ -267,32 +316,65 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val dailyExpenseMap = mutableMapOf<Int, Double>()
 
         val cal = Calendar.getInstance()
-        for (item in transactions) {
+        for (item in monthTx) {
             if (item.type == TransactionType.INCOME.name) {
                 incomeSum += item.amount
                 incomeByCat[item.category] = (incomeByCat[item.category] ?: 0.0) + item.amount
                 incomeCountByCat[item.category] = (incomeCountByCat[item.category] ?: 0) + 1
             } else {
-                expenseSum += item.amount
+                expenseAccrualSum += item.amount
                 expenseByCat[item.category] = (expenseByCat[item.category] ?: 0.0) + item.amount
                 expenseCountByCat[item.category] = (expenseCountByCat[item.category] ?: 0) + 1
 
                 cal.timeInMillis = item.timestamp
                 val day = cal.get(Calendar.DAY_OF_MONTH)
                 dailyExpenseMap[day] = (dailyExpenseMap[day] ?: 0.0) + item.amount
+
+                val card = item.cardId?.let { cardMap[it] }
+                if (card != null) {
+                    val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(item.timestamp, card)
+                    if (dueYear > period.year || (dueYear == period.year && dueMonth > period.month)) {
+                        pendingCardExpensesSum += item.amount
+                    }
+                }
             }
         }
 
-        val balance = incomeSum - expenseSum
+        // 3. Saídas de fato neste mês (Caixa / O que saiu de dinheiro neste mês)
+        // Inclui:
+        // - Despesas sem cartão realizadas neste mês
+        // - Despesas de cartão (de qualquer mês) cuja fatura VENCE neste mês atual
+        var cashOutflowThisMonth = 0.0
+        for (tx in allTx) {
+            if (tx.isDeleted || tx.type != TransactionType.EXPENSE.name) continue
+
+            val card = tx.cardId?.let { cardMap[it] }
+            if (card != null) {
+                val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(tx.timestamp, card)
+                if (dueYear == period.year && dueMonth == period.month) {
+                    cashOutflowThisMonth += tx.amount
+                }
+            } else {
+                if (tx.timestamp >= period.startEpoch && tx.timestamp <= period.endEpoch) {
+                    cashOutflowThisMonth += tx.amount
+                }
+            }
+        }
+
+        // Saldo operacional do mês considerando caixa real (Entradas - Saídas de fato)
+        val monthBalance = incomeSum - cashOutflowThisMonth
+        val accumulatedBalance = previousBalance + monthBalance
+        val accrualBalance = incomeSum - expenseAccrualSum
+
         val savingsRate = if (incomeSum > 0) {
-            ((balance / incomeSum).toFloat().coerceIn(-1f, 1f))
+            ((monthBalance / incomeSum).toFloat().coerceIn(-1f, 1f))
         } else {
             0f
         }
 
         val catExpenses = expenseByCat.map { (catName, sum) ->
             val catItem = Categories.getCategoryByName(catName, TransactionType.EXPENSE, customCats)
-            val pct = if (expenseSum > 0) (sum / expenseSum).toFloat() else 0f
+            val pct = if (expenseAccrualSum > 0) (sum / expenseAccrualSum).toFloat() else 0f
             CategorySpend(
                 category = catItem,
                 total = sum,
@@ -322,23 +404,33 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         MonthlyAnalytics(
             totalIncome = incomeSum,
-            totalExpense = expenseSum,
-            balance = balance,
+            totalExpense = expenseAccrualSum,
+            totalCashOutflow = cashOutflowThisMonth,
+            previousBalance = previousBalance,
+            balance = monthBalance,
+            accumulatedBalance = accumulatedBalance,
+            accrualBalance = accrualBalance,
             savingsRate = savingsRate,
             categoryExpenses = catExpenses,
             categoryIncomes = catIncomes,
-            dailyExpenses = dailyList
+            dailyExpenses = dailyList,
+            pendingCardExpenses = pendingCardExpensesSum
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MonthlyAnalytics())
 
-    // Aggregated cards with their monthly expenses
+    // Aggregated cards with their monthly invoice expenses
     val cardsWithExpenses: StateFlow<List<CardWithExpenses>> = combine(
         creditCards,
-        monthlyTransactions
-    ) { cards, transactions ->
+        allTransactions,
+        _currentPeriod
+    ) { cards, transactions, period ->
         cards.map { card ->
+            // Transactions whose invoice is due in the current period (month/year)
             val cardTxList = transactions.filter {
-                it.cardId == card.id && it.type == TransactionType.EXPENSE.name
+                !it.isDeleted &&
+                it.cardId == card.id &&
+                it.type == TransactionType.EXPENSE.name &&
+                CreditCardBillingHelper.isPaymentDueInPeriod(it.timestamp, card, period.year, period.month)
             }
             val totalExpense = cardTxList.sumOf { it.amount }
             val progress = if (card.limitAmount > 0) {
@@ -531,7 +623,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         name: String,
         type: TransactionType,
         iconName: String,
-        colorHex: String
+        colorHex: String,
+        oldName: String? = null
     ) {
         viewModelScope.launch {
             categoryRepository.updateCategory(
@@ -541,6 +634,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 iconName = iconName,
                 colorHex = colorHex
             )
+            if (!oldName.isNullOrBlank() && oldName != name.trim()) {
+                repository.updateCategoryName(oldName, name.trim(), type.name)
+            }
         }
     }
 

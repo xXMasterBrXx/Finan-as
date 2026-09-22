@@ -111,7 +111,7 @@ fun MyApplicationTheme(
                 val context = LocalContext.current
                 if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
-                if (systemDark) DarkColorScheme else LightColorScheme
+                if (systemDark) DarkColorScheme else WarmLightColorScheme
             }
         }
         AppThemeMode.LIGHT -> LightColorScheme
