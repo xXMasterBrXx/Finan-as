@@ -143,24 +143,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
 
-    val installedVersionName: StateFlow<String> = combine(
-        userPreferences.installedVersionTag,
-        _updateCheckStatus
-    ) { tag, _ ->
-        if (tag.isNotBlank()) {
-            tag
-        } else if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") {
-            "0.1.2"
-        } else {
+    fun getInstalledVersionName(): String {
+        return try {
+            val app = getApplication<Application>()
+            val pInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                app.packageManager.getPackageInfo(
+                    app.packageName,
+                    android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                app.packageManager.getPackageInfo(app.packageName, 0)
+            }
+            pInfo.versionName ?: com.example.BuildConfig.VERSION_NAME
+        } catch (e: Exception) {
             com.example.BuildConfig.VERSION_NAME
         }
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        if (userPreferences.installedVersionTag.value.isNotBlank()) userPreferences.installedVersionTag.value
-        else if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") "0.1.2"
-        else com.example.BuildConfig.VERSION_NAME
-    )
+    }
+
+    val installedVersionName: StateFlow<String> = MutableStateFlow(getInstalledVersionName()).asStateFlow()
 
     init {
         val db = AppDatabase.getInstance(application)
@@ -696,17 +697,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 _isCheckingUpdates.value = true
                 _updateCheckStatus.value = null
             }
-            val currentVer = userPreferences.installedVersionTag.value.ifBlank {
-                com.example.BuildConfig.VERSION_NAME
-            }
+            val currentVer = getInstalledVersionName()
             val result = updateManager.checkForUpdates(
                 com.example.util.GitHubUpdateManager.DEFAULT_REPO,
                 installedVersion = currentVer
             )
-            if (result is com.example.util.UpdateCheckResult.NoUpdate && result.currentTag.isNotBlank()) {
-                // If confirmed on latest release, sync the exact tag name from GitHub
-                userPreferences.setInstalledVersionTag(result.currentTag)
-            }
             if (isAutoCheck) {
                 if (result is com.example.util.UpdateCheckResult.UpdateAvailable) {
                     _updateCheckStatus.value = result
@@ -722,7 +717,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun downloadAndInstallApk(context: android.content.Context, downloadUrl: String, targetVersion: String? = null) {
+    fun downloadAndInstallApk(context: android.content.Context, downloadUrl: String) {
         viewModelScope.launch {
             _isDownloading.value = true
             _downloadProgress.value = 0
@@ -733,10 +728,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _downloadProgress.value = null
             
             result.onSuccess { apkFile ->
-                if (!targetVersion.isNullOrBlank()) {
-                    userPreferences.setInstalledVersionTag(targetVersion)
+                val installResult = updateManager.triggerInstall(context, apkFile)
+                installResult.onFailure { error ->
+                    _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error(
+                        error.localizedMessage ?: "Erro ao iniciar instalação do APK"
+                    )
                 }
-                updateManager.triggerInstall(context, apkFile)
             }.onFailure { error ->
                 _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error("Falha ao baixar o arquivo: ${error.localizedMessage}")
             }

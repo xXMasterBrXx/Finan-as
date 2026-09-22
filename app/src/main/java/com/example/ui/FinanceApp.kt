@@ -225,8 +225,7 @@ fun FinanceApp(
                     isDownloading = isDownloading,
                     downloadProgress = downloadProgress,
                     onUpdateClick = { downloadUrl ->
-                        val targetTag = (updateCheckStatus as? com.example.util.UpdateCheckResult.UpdateAvailable)?.latestVersionName
-                        viewModel.downloadAndInstallApk(context, downloadUrl, targetTag)
+                        viewModel.downloadAndInstallApk(context, downloadUrl)
                     },
                     onDismiss = {
                         viewModel.dismissTopUpdateBanner()
@@ -483,8 +482,7 @@ fun FinanceApp(
                             isDownloading = isDownloading,
                             onCheckForUpdates = { viewModel.checkForUpdates() },
                             onDownloadAndInstallApk = { url ->
-                                val targetTag = (updateCheckStatus as? com.example.util.UpdateCheckResult.UpdateAvailable)?.latestVersionName
-                                viewModel.downloadAndInstallApk(context, url, targetTag)
+                                viewModel.downloadAndInstallApk(context, url)
                             },
                             onClearUpdateStatus = { viewModel.clearUpdateStatus() }
                         )

@@ -981,11 +981,7 @@ fun SettingsScreen(
             icon = Icons.Default.Info
         ) {
             val displayVersion = installedVersionName.ifBlank {
-                if (com.example.BuildConfig.VERSION_NAME == "1.0.0" || com.example.BuildConfig.VERSION_NAME == "1.0") {
-                    "0.1.2"
-                } else {
-                    com.example.BuildConfig.VERSION_NAME
-                }
+                com.example.BuildConfig.VERSION_NAME
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

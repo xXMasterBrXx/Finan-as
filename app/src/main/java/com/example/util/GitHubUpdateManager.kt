@@ -2,8 +2,10 @@ package com.example.util
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -150,18 +152,46 @@ class GitHubUpdateManager {
         }
     }
 
-    fun triggerInstall(context: Context, apkFile: File) {
-        val authority = "${context.packageName}.fileprovider"
-        val apkUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            FileProvider.getUriForFile(context, authority, apkFile)
-        } else {
-            Uri.fromFile(apkFile)
-        }
+    fun triggerInstall(context: Context, apkFile: File): Result<Unit> {
+        return try {
+            if (!apkFile.exists() || apkFile.length() == 0L) {
+                return Result.failure(Exception("Arquivo APK não encontrado ou corrompido."))
+            }
+            apkFile.setReadable(true, false)
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(settingsIntent)
+                    return Result.failure(Exception("Permita a instalação de fontes desconhecidas para o FinanFlow nas configurações do Android e toque em atualizar novamente."))
+                }
+            }
+
+            val authority = "${context.packageName}.fileprovider"
+            val apkUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                FileProvider.getUriForFile(context, authority, apkFile)
+            } else {
+                Uri.fromFile(apkFile)
+            }
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+
+            val resolveInfoList = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resolveInfoList) {
+                val packageName = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            context.startActivity(intent)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        context.startActivity(intent)
     }
 }

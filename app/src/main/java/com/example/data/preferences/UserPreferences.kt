@@ -34,6 +34,13 @@ class UserPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("finanflow_user_prefs", Context.MODE_PRIVATE)
 
+    init {
+        // Clear any legacy premature version tag preference
+        if (prefs.contains("key_installed_version_tag")) {
+            prefs.edit().remove("key_installed_version_tag").apply()
+        }
+    }
+
     private val _themeMode = MutableStateFlow(
         try {
             AppThemeMode.valueOf(prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.name) ?: AppThemeMode.SYSTEM.name)
@@ -91,17 +98,6 @@ class UserPreferences(context: Context) {
         prefs.getString(KEY_P2P_SYNC_KEY, "") ?: ""
     )
     val p2pSyncKey: StateFlow<String> = _p2pSyncKey.asStateFlow()
-
-    private val _installedVersionTag = MutableStateFlow(
-        prefs.getString(KEY_INSTALLED_VERSION_TAG, "") ?: ""
-    )
-    val installedVersionTag: StateFlow<String> = _installedVersionTag.asStateFlow()
-
-    fun setInstalledVersionTag(tag: String) {
-        val clean = tag.trim()
-        prefs.edit().putString(KEY_INSTALLED_VERSION_TAG, clean).apply()
-        _installedVersionTag.value = clean
-    }
 
     fun isInitialDataSeeded(): Boolean {
         return prefs.getBoolean(KEY_HAS_SEEDED_INITIAL_DATA, false)
@@ -190,7 +186,6 @@ class UserPreferences(context: Context) {
         private const val KEY_BACKUP_INTERVAL = "key_backup_interval"
         private const val KEY_LAST_BACKUP_TIMESTAMP = "key_last_backup_timestamp"
         private const val KEY_GITHUB_REPO = "key_github_repo"
-        private const val KEY_INSTALLED_VERSION_TAG = "key_installed_version_tag"
 
         @Volatile
         private var instance: UserPreferences? = null
