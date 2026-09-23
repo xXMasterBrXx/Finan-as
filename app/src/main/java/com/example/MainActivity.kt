@@ -29,8 +29,13 @@ class MainActivity : ComponentActivity() {
       val viewModel: FinanceViewModel = viewModel()
       val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
       val themeColor by viewModel.themeColor.collectAsStateWithLifecycle()
+      val customColorHex by viewModel.customThemeColorHex.collectAsStateWithLifecycle()
 
-      MyApplicationTheme(themeMode = themeMode, themeColor = themeColor) {
+      MyApplicationTheme(
+          themeMode = themeMode,
+          themeColor = themeColor,
+          customColorHex = customColorHex
+      ) {
         FinanceApp(viewModel = viewModel)
       }
     }

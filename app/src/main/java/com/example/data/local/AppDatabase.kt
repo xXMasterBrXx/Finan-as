@@ -6,14 +6,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [TransactionEntity::class, CreditCardEntity::class, CustomCategoryEntity::class],
-    version = 6,
+    entities = [TransactionEntity::class, CreditCardEntity::class, CustomCategoryEntity::class, NotificationItemEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun creditCardDao(): CreditCardDao
     abstract fun customCategoryDao(): CustomCategoryDao
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
         @Volatile

@@ -16,6 +16,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE isDeleted = 0 AND timestamp >= :startEpoch AND timestamp <= :endEpoch ORDER BY timestamp DESC")
     fun getTransactionsBetween(startEpoch: Long, endEpoch: Long): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM transactions WHERE isDeleted = 0 AND timestamp >= :startEpoch AND timestamp <= :endEpoch ORDER BY timestamp DESC")
+    suspend fun getTransactionsBetweenSync(startEpoch: Long, endEpoch: Long): List<TransactionEntity>
+
     @Query("SELECT COUNT(*) FROM transactions WHERE isDeleted = 0")
     suspend fun getTransactionCount(): Int
 

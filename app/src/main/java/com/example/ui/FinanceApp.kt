@@ -37,10 +37,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
@@ -91,6 +95,7 @@ import com.example.ui.components.ChartsScreen
 import com.example.ui.components.LiquidGlassBottomBar
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.MonthlyExpenseCharts
+import com.example.ui.components.NotificationsSheet
 import com.example.ui.components.P2PStatusBadge
 import com.example.ui.components.P2PSyncDialog
 import com.example.ui.components.SettingsScreen
@@ -119,6 +124,7 @@ fun FinanceApp(
     val categoryFilter by viewModel.categoryFilter.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val themeColor by viewModel.themeColor.collectAsStateWithLifecycle()
+    val customThemeColorHex by viewModel.customThemeColorHex.collectAsStateWithLifecycle()
     val monthlyBudgetLimit by viewModel.monthlyBudgetLimit.collectAsStateWithLifecycle()
     val hideBalances by viewModel.hideBalances.collectAsStateWithLifecycle()
     val upcomingScheduleData by viewModel.upcomingScheduleData.collectAsStateWithLifecycle()
@@ -137,13 +143,41 @@ fun FinanceApp(
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val isDownloading by viewModel.isDownloading.collectAsStateWithLifecycle()
     val installedVersionName by viewModel.installedVersionName.collectAsStateWithLifecycle()
+    val notifications by viewModel.allNotifications.collectAsStateWithLifecycle()
+    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsStateWithLifecycle()
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
+    val notifyRecurring by viewModel.notifyRecurring.collectAsStateWithLifecycle()
+    val notifyCardClosing by viewModel.notifyCardClosing.collectAsStateWithLifecycle()
+    val notifyCardDue by viewModel.notifyCardDue.collectAsStateWithLifecycle()
+    val notifyBudgetLimit by viewModel.notifyBudgetLimit.collectAsStateWithLifecycle()
+    val notifyDailyReminder by viewModel.notifyDailyReminder.collectAsStateWithLifecycle()
+    val notificationAdvanceDays by viewModel.notificationAdvanceDays.collectAsStateWithLifecycle()
+    val notificationHour by viewModel.notificationHour.collectAsStateWithLifecycle()
+    val notificationMinute by viewModel.notificationMinute.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Resumo, 1: Extrato, 2: Gráficos, 3: Cartões, 4: Ajustes
+    var showNotificationsSheet by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
     var initialCardIdForDialog by remember { mutableStateOf<Long?>(null) }
+
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.checkNotificationsNow()
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (!com.example.util.NotificationManagerHelper.hasNotificationPermission(context)) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     var transactionToAnticipate by remember { mutableStateOf<TransactionEntity?>(null) }
     var groupForAnticipate by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
@@ -254,6 +288,35 @@ fun FinanceApp(
                 },
                 actions = {
                     if (selectedTab != 4) {
+                        IconButton(
+                            onClick = { showNotificationsSheet = true },
+                            modifier = Modifier.testTag("notifications_bell_icon")
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (unreadNotificationCount > 0) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        ) {
+                                            Text(
+                                                text = if (unreadNotificationCount > 99) "99+" else unreadNotificationCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (unreadNotificationCount > 0) Icons.Filled.NotificationsActive else Icons.Filled.Notifications,
+                                    contentDescription = "Central de Notificações",
+                                    tint = if (unreadNotificationCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = { viewModel.setHideBalances(!hideBalances) },
                             modifier = Modifier.testTag("toggle_privacy_icon")
@@ -538,6 +601,8 @@ fun FinanceApp(
                             onThemeModeChange = { viewModel.setThemeMode(it) },
                             themeColor = themeColor,
                             onThemeColorChange = { viewModel.setThemeColor(it) },
+                            customColorHex = customThemeColorHex,
+                            onCustomColorChange = { viewModel.setCustomThemeColor(it) },
                             monthlyBudgetLimit = monthlyBudgetLimit,
                             onBudgetLimitChange = { viewModel.setMonthlyBudgetLimit(it) },
                             hideBalances = hideBalances,
@@ -582,6 +647,25 @@ fun FinanceApp(
                                 viewModel.downloadAndInstallApk(context, url)
                             },
                             onClearUpdateStatus = { viewModel.clearUpdateStatus() },
+                            // Notifications
+                            notificationsEnabled = notificationsEnabled,
+                            onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
+                            notifyRecurring = notifyRecurring,
+                            onNotifyRecurringChange = { viewModel.setNotifyRecurring(it) },
+                            notifyCardClosing = notifyCardClosing,
+                            onNotifyCardClosingChange = { viewModel.setNotifyCardClosing(it) },
+                            notifyCardDue = notifyCardDue,
+                            onNotifyCardDueChange = { viewModel.setNotifyCardDue(it) },
+                            notifyBudgetLimit = notifyBudgetLimit,
+                            onNotifyBudgetLimitChange = { viewModel.setNotifyBudgetLimit(it) },
+                            notifyDailyReminder = notifyDailyReminder,
+                            onNotifyDailyReminderChange = { viewModel.setNotifyDailyReminder(it) },
+                            notificationAdvanceDays = notificationAdvanceDays,
+                            onNotificationAdvanceDaysChange = { viewModel.setNotificationAdvanceDays(it) },
+                            notificationHour = notificationHour,
+                            notificationMinute = notificationMinute,
+                            onNotificationTimeChange = { h, m -> viewModel.setNotificationTime(h, m) },
+                            onSendTestNotification = { viewModel.sendTestNotification() },
                             onNavigateBack = { selectedTab = 0 }
                         )
                     }
@@ -822,5 +906,32 @@ fun FinanceApp(
             }
         )
     }
+
+    // Modal Sheet for Notifications Center
+    NotificationsSheet(
+        isOpen = showNotificationsSheet,
+        onDismiss = { showNotificationsSheet = false },
+        notifications = notifications,
+        unreadCount = unreadNotificationCount,
+        onMarkAsRead = { id -> viewModel.markNotificationAsRead(id) },
+        onMarkAllAsRead = { viewModel.markAllNotificationsAsRead() },
+        onDeleteNotification = { id -> viewModel.deleteNotification(id) },
+        onClearAll = { viewModel.clearAllNotifications() },
+        onNavigateToSection = { route ->
+            when (route) {
+                "cards" -> selectedTab = 3
+                "transactions" -> selectedTab = 1
+                "dashboard" -> selectedTab = 0
+                "settings" -> selectedTab = 4
+                else -> {}
+            }
+        },
+        onOpenSettings = {
+            selectedTab = 4
+        },
+        onSendTestNotification = {
+            viewModel.sendTestNotification()
+        }
+    )
 }
 

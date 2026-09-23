@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.CreditCardEntity
+import com.example.data.local.NotificationItemEntity
 import com.example.data.local.TransactionEntity
 import com.example.data.model.Categories
 import com.example.data.model.CategoryItem
@@ -14,8 +15,10 @@ import com.example.data.preferences.AppThemeColor
 import com.example.data.preferences.UserPreferences
 import com.example.data.repository.CategoryRepository
 import com.example.data.repository.CreditCardRepository
+import com.example.data.repository.NotificationRepository
 import com.example.data.repository.TransactionRepository
 import com.example.util.CreditCardBillingHelper
+import com.example.util.NotificationManagerHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -155,16 +158,32 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val repository: TransactionRepository
     private val cardRepository: CreditCardRepository
     private val categoryRepository: CategoryRepository
+    private val notificationRepository: NotificationRepository
     private val userPreferences: UserPreferences = UserPreferences.getInstance(application)
     val p2pSyncManager: com.example.data.p2p.P2PSyncManager
 
     val themeMode: StateFlow<AppThemeMode> = userPreferences.themeMode
     val themeColor: StateFlow<AppThemeColor> = userPreferences.themeColor
+    val customThemeColorHex: StateFlow<Long> = userPreferences.customThemeColorHex
     val monthlyBudgetLimit: StateFlow<Double> = userPreferences.monthlyBudgetLimit
     val hideBalances: StateFlow<Boolean> = userPreferences.hideBalances
     val defaultCurrency: StateFlow<String> = userPreferences.defaultCurrency
     val p2pSyncEnabled: StateFlow<Boolean> = userPreferences.p2pSyncEnabled
     val p2pSyncKey: StateFlow<String> = userPreferences.p2pSyncKey
+
+    // Notification State & Preferences
+    val notificationsEnabled: StateFlow<Boolean> = userPreferences.notificationsEnabled
+    val notifyRecurring: StateFlow<Boolean> = userPreferences.notifyRecurring
+    val notifyCardClosing: StateFlow<Boolean> = userPreferences.notifyCardClosing
+    val notifyCardDue: StateFlow<Boolean> = userPreferences.notifyCardDue
+    val notifyBudgetLimit: StateFlow<Boolean> = userPreferences.notifyBudgetLimit
+    val notifyDailyReminder: StateFlow<Boolean> = userPreferences.notifyDailyReminder
+    val notificationAdvanceDays: StateFlow<Int> = userPreferences.notificationAdvanceDays
+    val notificationHour: StateFlow<Int> = userPreferences.notificationHour
+    val notificationMinute: StateFlow<Int> = userPreferences.notificationMinute
+
+    val allNotifications: StateFlow<List<NotificationItemEntity>>
+    val unreadNotificationCount: StateFlow<Int>
 
     val p2pSyncStatus: StateFlow<com.example.data.p2p.P2PSyncStatus>
 
@@ -231,11 +250,18 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         repository = TransactionRepository(db.transactionDao(), userPreferences, p2pSyncManager)
         cardRepository = CreditCardRepository(db.creditCardDao(), userPreferences, p2pSyncManager)
         categoryRepository = CategoryRepository(db.customCategoryDao(), p2pSyncManager)
+        notificationRepository = NotificationRepository(db.notificationDao(), db.transactionDao(), db.creditCardDao(), userPreferences)
         backupManager = com.example.data.backup.LocalBackupManager(application, db, userPreferences)
         refreshBackupList()
         checkScheduledBackup()
 
         p2pSyncStatus = p2pSyncManager.syncStatus
+
+        allNotifications = notificationRepository.allNotifications
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        unreadNotificationCount = notificationRepository.unreadCount
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
         creditCards = cardRepository.allCards
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -263,6 +289,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
             // Automatic background check for new releases on startup
             checkForUpdates(isAutoCheck = true)
+
+            // Setup and verify notifications
+            NotificationManagerHelper.createNotificationChannel(application)
+            NotificationManagerHelper.scheduleDailyAlarm(application)
+            checkNotificationsNow()
         }
     }
 
@@ -974,6 +1005,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         userPreferences.setThemeColor(color)
     }
 
+    fun setCustomThemeColor(hex: Long) {
+        userPreferences.setCustomThemeColor(hex)
+    }
+
     fun setMonthlyBudgetLimit(limit: Double) {
         userPreferences.setMonthlyBudgetLimit(limit)
     }
@@ -1183,5 +1218,80 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearUpdateStatus() {
         _updateCheckStatus.value = null
+    }
+
+    // --- Notification Operations ---
+
+    fun markNotificationAsRead(id: Long) {
+        viewModelScope.launch {
+            notificationRepository.markAsRead(id)
+        }
+    }
+
+    fun markAllNotificationsAsRead() {
+        viewModelScope.launch {
+            notificationRepository.markAllAsRead()
+        }
+    }
+
+    fun deleteNotification(id: Long) {
+        viewModelScope.launch {
+            notificationRepository.delete(id)
+        }
+    }
+
+    fun clearAllNotifications() {
+        viewModelScope.launch {
+            notificationRepository.clearAll()
+        }
+    }
+
+    fun checkNotificationsNow() {
+        viewModelScope.launch {
+            NotificationManagerHelper.checkAndNotifyNow(getApplication())
+        }
+    }
+
+    fun sendTestNotification() {
+        NotificationManagerHelper.sendTestNotification(getApplication())
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        userPreferences.setNotificationsEnabled(enabled)
+        if (enabled) {
+            NotificationManagerHelper.scheduleDailyAlarm(getApplication())
+            checkNotificationsNow()
+        } else {
+            NotificationManagerHelper.cancelDailyAlarm(getApplication())
+        }
+    }
+
+    fun setNotifyRecurring(enabled: Boolean) {
+        userPreferences.setNotifyRecurring(enabled)
+    }
+
+    fun setNotifyCardClosing(enabled: Boolean) {
+        userPreferences.setNotifyCardClosing(enabled)
+    }
+
+    fun setNotifyCardDue(enabled: Boolean) {
+        userPreferences.setNotifyCardDue(enabled)
+    }
+
+    fun setNotifyBudgetLimit(enabled: Boolean) {
+        userPreferences.setNotifyBudgetLimit(enabled)
+    }
+
+    fun setNotifyDailyReminder(enabled: Boolean) {
+        userPreferences.setNotifyDailyReminder(enabled)
+    }
+
+    fun setNotificationAdvanceDays(days: Int) {
+        userPreferences.setNotificationAdvanceDays(days)
+    }
+
+    fun setNotificationTime(hour: Int, minute: Int) {
+        userPreferences.setNotificationTime(hour, minute)
+        NotificationManagerHelper.scheduleDailyAlarm(getApplication())
     }
 }

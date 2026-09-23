@@ -14,6 +14,9 @@ interface CreditCardDao {
     @Query("SELECT * FROM credit_cards WHERE isDeleted = 0 ORDER BY id ASC")
     fun getAllCards(): Flow<List<CreditCardEntity>>
 
+    @Query("SELECT * FROM credit_cards WHERE isDeleted = 0 ORDER BY id ASC")
+    suspend fun getAllCardsSync(): List<CreditCardEntity>
+
     @Query("SELECT * FROM credit_cards WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getCardById(id: Long): CreditCardEntity?
 
