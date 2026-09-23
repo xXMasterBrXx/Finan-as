@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
@@ -192,6 +193,7 @@ fun SettingsScreen(
     notificationMinute: Int = 0,
     onNotificationTimeChange: (Int, Int) -> Unit = { _, _ -> },
     onSendTestNotification: () -> Unit = {},
+    onOpenBankImportSettings: () -> Unit = {},
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -544,6 +546,17 @@ fun SettingsScreen(
                     valueText = statusText,
                     onClick = { showNotificationSettingsSheet = true },
                     testTag = "settings_notifications_row"
+                )
+
+                SettingsRowDivider()
+
+                SettingsGroupRow(
+                    icon = Icons.Default.Receipt,
+                    title = "Importação por Notificação Bancária",
+                    subtitle = "Reconhecimento automático de compras e Pix nos bancos",
+                    valueText = "Configurar",
+                    onClick = onOpenBankImportSettings,
+                    testTag = "settings_bank_import_row"
                 )
             }
         }
@@ -1161,248 +1174,267 @@ fun SettingsScreen(
         )
     }
 
-    // Dialog: Frequência de Backup
+    // BottomSheet: Frequência de Backup
     if (showIntervalDialog) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showIntervalDialog = false },
-            title = { Text("Backup Automático") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Defina com que frequência o FinanFlow deve gerar cópias de segurança criptografadas:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    listOf(
-                        Triple("MANUAL", "Manual (apenas quando solicitado)", "Crie backups quando preferir"),
-                        Triple("DAILY", "Diário", "Gera uma cópia de segurança a cada dia"),
-                        Triple("WEEKLY", "Semanal", "Gera uma cópia a cada 7 dias")
-                    ).forEach { (code, title, desc) ->
-                        val selected = backupInterval == code
-                        Surface(
-                            onClick = {
-                                onBackupIntervalChange(code)
-                                showIntervalDialog = false
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = desc,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Backup Automático",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Defina com que frequência o FinanFlow deve gerar cópias de segurança criptografadas:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                listOf(
+                    Triple("MANUAL", "Manual (apenas quando solicitado)", "Crie backups quando preferir"),
+                    Triple("DAILY", "Diário", "Gera uma cópia de segurança a cada dia"),
+                    Triple("WEEKLY", "Semanal", "Gera uma cópia a cada 7 dias")
+                ).forEach { (code, title, desc) ->
+                    val selected = backupInterval == code
+                    Surface(
+                        onClick = {
+                            onBackupIntervalChange(code)
+                            showIntervalDialog = false
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = desc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showIntervalDialog = false }) {
-                    Text("Fechar")
-                }
             }
-        )
+        }
     }
 
-    // Dialog: Antecedência dos Avisos
+    // BottomSheet: Antecedência dos Avisos
     if (showAdvanceDaysDialog) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showAdvanceDaysDialog = false },
-            title = { Text("Antecedência dos Avisos") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Defina com quantos dias de antecedência você deseja receber o primeiro alerta de contas e faturas:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    listOf(
-                        0 to "No próprio dia do vencimento",
-                        1 to "1 dia antes (Recomendado)",
-                        2 to "2 dias antes",
-                        3 to "3 dias antes",
-                        5 to "5 dias antes",
-                        7 to "7 dias antes (1 semana)"
-                    ).forEach { (days, label) ->
-                        val selected = notificationAdvanceDays == days
-                        Surface(
-                            onClick = {
-                                onNotificationAdvanceDaysChange(days)
-                                showAdvanceDaysDialog = false
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                            modifier = Modifier.fillMaxWidth()
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Antecedência dos Avisos",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Defina com quantos dias de antecedência você deseja receber o primeiro alerta de contas e faturas:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                listOf(
+                    0 to "No próprio dia do vencimento",
+                    1 to "1 dia antes (Recomendado)",
+                    2 to "2 dias antes",
+                    3 to "3 dias antes",
+                    5 to "5 dias antes",
+                    7 to "7 dias antes (1 semana)"
+                ).forEach { (days, label) ->
+                    val selected = notificationAdvanceDays == days
+                    Surface(
+                        onClick = {
+                            onNotificationAdvanceDaysChange(days)
+                            showAdvanceDaysDialog = false
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                    ),
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                if (selected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showAdvanceDaysDialog = false }) {
-                    Text("Fechar")
-                }
             }
-        )
+        }
     }
 
-    // Dialog: Horário das Notificações
+    // BottomSheet: Horário das Notificações
     if (showTimePickerDialog) {
         var tempHour by remember { mutableStateOf(notificationHour) }
         var tempMinute by remember { mutableStateOf(notificationMinute) }
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showTimePickerDialog = false },
-            title = { Text("Horário das Notificações") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Horário das Notificações",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Text(
+                    text = "Escolha o horário em que os alertas diários e lembretes serão enviados:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
                 ) {
                     Text(
-                        text = "Escolha o horário em que os alertas diários e lembretes serão enviados:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = String.format(Locale.getDefault(), "%02d:%02d", tempHour, tempMinute),
+                        style = MaterialTheme.typography.displayMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
                     )
+                }
 
-                    // Display Time
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = String.format(Locale.getDefault(), "%02d:%02d", tempHour, tempMinute),
-                            style = MaterialTheme.typography.displayMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
-                        )
-                    }
-
-                    // Quick presets
-                    Text(
-                        text = "Horários rápidos:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(8 to 0, 9 to 0, 12 to 0, 18 to 0, 20 to 0).forEach { (h, m) ->
-                            val isSel = (tempHour == h && tempMinute == m)
-                            Surface(
-                                onClick = {
-                                    tempHour = h
-                                    tempMinute = m
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.weight(1f)
+                Text(
+                    text = "Horários rápidos:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(8 to 0, 9 to 0, 12 to 0, 18 to 0, 20 to 0).forEach { (h, m) ->
+                        val isSel = (tempHour == h && tempMinute == m)
+                        Surface(
+                            onClick = {
+                                tempHour = h
+                                tempMinute = m
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = String.format(Locale.getDefault(), "%02d:%02d", h, m),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                        )
+                                Text(
+                                    text = String.format(Locale.getDefault(), "%02d:%02d", h, m),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     )
-                                }
+                                )
                             }
                         }
                     }
-
-                    // Sliders for Hour & Minute
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Hora", style = MaterialTheme.typography.labelSmall)
-                            Text("${tempHour}h", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                        }
-                        Slider(
-                            value = tempHour.toFloat(),
-                            onValueChange = { tempHour = it.toInt() },
-                            valueRange = 0f..23f,
-                            steps = 22
-                        )
-                    }
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Minuto", style = MaterialTheme.typography.labelSmall)
-                            Text("${tempMinute} min", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                        }
-                        Slider(
-                            value = tempMinute.toFloat(),
-                            onValueChange = { tempMinute = (it / 5).toInt() * 5 },
-                            valueRange = 0f..55f,
-                            steps = 10
-                        )
-                    }
                 }
-            },
-            confirmButton = {
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Hora", style = MaterialTheme.typography.labelSmall)
+                        Text("${tempHour}h", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                    }
+                    Slider(
+                        value = tempHour.toFloat(),
+                        onValueChange = { tempHour = it.toInt() },
+                        valueRange = 0f..23f,
+                        steps = 22
+                    )
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Minuto", style = MaterialTheme.typography.labelSmall)
+                        Text("${tempMinute} min", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                    }
+                    Slider(
+                        value = tempMinute.toFloat(),
+                        onValueChange = { tempMinute = (it / 5).toInt() * 5 },
+                        valueRange = 0f..55f,
+                        steps = 10
+                    )
+                }
+
                 Button(
                     onClick = {
                         onNotificationTimeChange(tempHour, tempMinute)
                         showTimePickerDialog = false
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Salvar Horário")
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePickerDialog = false }) {
-                    Text("Cancelar")
-                }
             }
-        )
+        }
     }
 
     // ModalBottomSheet: Configurações de Notificações & Alertas
@@ -1960,111 +1992,168 @@ fun SettingsScreen(
         }
     }
 
-    // Dialog: Definir Orçamento Mensal
+    // BottomSheet: Definir Orçamento Mensal
     if (showBudgetDialog) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showBudgetDialog = false },
-            title = { Text("Teto de Gastos Mensal") },
-            text = {
-                Column {
-                    Text(
-                        text = "Informe o limite máximo que você planeja gastar por mês. Digite 0 para remover a meta.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = budgetInput,
-                        onValueChange = {
-                            val filtered = it.replace(',', '.')
-                            if (filtered.count { ch -> ch == '.' } <= 1 && filtered.all { ch -> ch.isDigit() || ch == '.' }) {
-                                budgetInput = filtered
-                            }
-                        },
-                        label = { Text("Limite (R$)") },
-                        placeholder = { Text("0,00") },
-                        leadingIcon = { Text("R$", fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("budget_input_field")
-                    )
-                }
-            },
-            confirmButton = {
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Teto de Gastos Mensal",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Informe o limite máximo que você planeja gastar por mês. Digite 0 para remover a meta.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = budgetInput,
+                    onValueChange = {
+                        val filtered = it.replace(',', '.')
+                        if (filtered.count { ch -> ch == '.' } <= 1 && filtered.all { ch -> ch.isDigit() || ch == '.' }) {
+                            budgetInput = filtered
+                        }
+                    },
+                    label = { Text("Limite (R$)") },
+                    placeholder = { Text("0,00") },
+                    leadingIcon = { Text("R$", fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("budget_input_field")
+                )
+
                 Button(
                     onClick = {
                         val amount = budgetInput.toDoubleOrNull() ?: 0.0
                         onBudgetLimitChange(if (amount >= 0) amount else 0.0)
                         showBudgetDialog = false
                     },
-                    modifier = Modifier.testTag("save_budget_button")
+                    modifier = Modifier.fillMaxWidth().testTag("save_budget_button"),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Salvar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBudgetDialog = false }) {
-                    Text("Cancelar")
+                    Text("Salvar Teto")
                 }
             }
-        )
+        }
     }
 
-    // Dialog: Confirmar Restaurar Amostra
+    // BottomSheet: Confirmar Restaurar Amostra
     if (showResetDialog) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("Restaurar dados de exemplo?") },
-            text = {
-                Text("Isso substituirá seus lançamentos atuais pelo conjunto inicial de teste (com salários, compras, lazer e contas).")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onResetToSampleData()
-                        showResetDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.testTag("confirm_reset_sample_button")
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Restaurar Dados de Exemplo?",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Isso substituirá seus lançamentos atuais pelo conjunto inicial de teste (com salários, compras, lazer e contas).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Confirmar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("Cancelar")
+                    OutlinedButton(
+                        onClick = { showResetDialog = false },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = {
+                            onResetToSampleData()
+                            showResetDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f).testTag("confirm_reset_sample_button"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Confirmar")
+                    }
                 }
             }
-        )
+        }
     }
 
-    // Dialog: Confirmar Apagar Tudo
+    // BottomSheet: Confirmar Apagar Tudo
     if (showClearDialog) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Apagar todos os lançamentos?") },
-            text = {
-                Text("Tem certeza? Todos os registros de entradas e saídas serão excluídos definitivamente.")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onClearAllData()
-                        showClearDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ExpenseRed),
-                    modifier = Modifier.testTag("confirm_clear_all_button")
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Apagar Todos os Lançamentos?",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = ExpenseRed
+                )
+                Text(
+                    text = "Tem certeza? Todos os registros de entradas e saídas serão excluídos definitivamente do aparelho.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Sim, Apagar Tudo")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancelar")
+                    OutlinedButton(
+                        onClick = { showClearDialog = false },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = {
+                            onClearAllData()
+                            showClearDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ExpenseRed),
+                        modifier = Modifier.weight(1f).testTag("confirm_clear_all_button"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Sim, Apagar")
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -2231,6 +2320,7 @@ private data class ThemeItemInfo(
 /**
  * Interactive Custom Color Palette Studio (HSV Sliders, Hex Code, Presets & Live Preview)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CustomColorPickerDialog(
     initialColorHex: Long,
@@ -2253,11 +2343,22 @@ private fun CustomColorPickerDialog(
     var hexInputError by remember { mutableStateOf(false) }
 
     val currentColor = Color(currentRgbInt)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(24.dp),
-        title = {
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2290,376 +2391,368 @@ private fun CustomColorPickerDialog(
                     )
                 }
             }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+
+            // Live Preview Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             ) {
-                // Live Preview Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(currentColor)
-                                        .border(2.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Column {
-                                    Text(
-                                        text = currentHexStr,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "RGB: ${((currentRgbInt shr 16) and 0xFF)}, ${((currentRgbInt shr 8) and 0xFF)}, ${(currentRgbInt and 0xFF)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(100.dp),
-                                color = currentColor,
-                                modifier = Modifier.padding(2.dp)
-                            ) {
-                                Text(
-                                    text = "Ativo",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        // Elementos de Demonstração
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(100.dp),
-                                color = currentColor.copy(alpha = 0.16f),
-                                border = BorderStroke(1.dp, currentColor.copy(alpha = 0.35f)),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Tag Visual",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = currentColor
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(100.dp),
-                                color = currentColor,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Botão Principal",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Digitação direta do Código HEX
-                OutlinedTextField(
-                    value = hexInputText,
-                    onValueChange = { input ->
-                        hexInputText = input
-                        val clean = input.trim().removePrefix("#")
-                        if (clean.length == 6) {
-                            try {
-                                val parsedLong = clean.toLong(16)
-                                val pr = ((parsedLong shr 16) and 0xFF).toInt()
-                                val pg = ((parsedLong shr 8) and 0xFF).toInt()
-                                val pb = (parsedLong and 0xFF).toInt()
-                                val nhsv = FloatArray(3)
-                                android.graphics.Color.RGBToHSV(pr, pg, pb, nhsv)
-                                hue = nhsv[0]
-                                saturation = nhsv[1]
-                                value = nhsv[2]
-                                hexInputError = false
-                            } catch (e: Exception) {
-                                hexInputError = true
-                            }
-                        } else {
-                            hexInputError = input.isNotEmpty() && input != "#"
-                        }
-                    },
-                    label = { Text("Código Hexadecimal") },
-                    placeholder = { Text("#B76E79") },
-                    singleLine = true,
-                    isError = hexInputError,
-                    supportingText = if (hexInputError) {
-                        { Text("Digite um código hexadecimal válido (ex: #E07A5F)") }
-                    } else null,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            tint = currentColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                // Slider 1: Matiz (Hue Rainbow Track)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Matiz / Tom (Hue)",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${hue.toInt()}°",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Red,
-                                        Color.Yellow,
-                                        Color.Green,
-                                        Color.Cyan,
-                                        Color.Blue,
-                                        Color.Magenta,
-                                        Color.Red
-                                    )
-                                )
-                            )
-                    )
-
-                    Slider(
-                        value = hue,
-                        onValueChange = { hue = it },
-                        valueRange = 0f..360f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = currentColor,
-                            activeTrackColor = Color.Transparent,
-                            inactiveTrackColor = Color.Transparent
-                        )
-                    )
-                }
-
-                // Slider 2: Saturação
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Saturação / Intensidade",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${(saturation * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Gray,
-                                        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, value)))
-                                    )
-                                )
-                            )
-                    )
-
-                    Slider(
-                        value = saturation,
-                        onValueChange = { saturation = it },
-                        valueRange = 0.05f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = currentColor,
-                            activeTrackColor = Color.Transparent,
-                            inactiveTrackColor = Color.Transparent
-                        )
-                    )
-                }
-
-                // Slider 3: Luminosidade
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Luminosidade / Brilho",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${(value * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Black,
-                                        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, 1f)))
-                                    )
-                                )
-                            )
-                    )
-
-                    Slider(
-                        value = value,
-                        onValueChange = { value = it },
-                        valueRange = 0.15f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = currentColor,
-                            activeTrackColor = Color.Transparent,
-                            inactiveTrackColor = Color.Transparent
-                        )
-                    )
-                }
-
-                // Sugestões de Paleta Rápida
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Sugestões de Designers",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    val quickSwatches = listOf(
-                        0xFFB76E79L, // Rose Gold Clássico
-                        0xFFFF6B6BL, // Coral Red
-                        0xFFFF9F43L, // Laranja Sol
-                        0xFFFECA57L, // Amarelo Dourado
-                        0xFF10AC84L, // Verde Jade
-                        0xFF1DD1A1L, // Menta Pastel
-                        0xFF48DBFBL, // Azul Celeste
-                        0xFF2E86DEL, // Azul Real
-                        0xFF5F27CDL, // Roxo Deep
-                        0xFFF368E0L, // Rosa Neon
-                        0xFF8395A7L, // Titânio Slate
-                        0xFF00D2D3L, // Verde Água
-                        0xFFE056FDL, // Lavanda
-                        0xFFFF7979L, // Pêssego
-                        0xFF6C5CE7L, // Iris Elétrica
-                        0xFFE17055L  // Terracota
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        for (swatch in quickSwatches) {
-                            val swColor = Color(swatch or 0xFF000000L)
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(swColor)
-                                    .border(
-                                        width = if (currentHexStr.equals(String.format("#%06X", 0xFFFFFF and swatch.toInt()), ignoreCase = true)) 3.dp else 1.dp,
-                                        color = if (currentHexStr.equals(String.format("#%06X", 0xFFFFFF and swatch.toInt()), ignoreCase = true)) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surface,
-                                        shape = CircleShape
-                                    )
-                                    .clickable {
-                                        val sr = ((swatch shr 16) and 0xFF).toInt()
-                                        val sg = ((swatch shr 8) and 0xFF).toInt()
-                                        val sb = (swatch and 0xFF).toInt()
-                                        val nhsv = FloatArray(3)
-                                        android.graphics.Color.RGBToHSV(sr, sg, sb, nhsv)
-                                        hue = nhsv[0]
-                                        saturation = nhsv[1]
-                                        value = nhsv[2]
-                                    }
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(currentColor)
+                                    .border(2.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = currentHexStr,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "RGB: ${((currentRgbInt shr 16) and 0xFF)}, ${((currentRgbInt shr 8) and 0xFF)}, ${(currentRgbInt and 0xFF)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(100.dp),
+                            color = currentColor,
+                            modifier = Modifier.padding(2.dp)
+                        ) {
+                            Text(
+                                text = "Ativo",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
+                        }
+                    }
+
+                    // Elementos de Demonstração
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(100.dp),
+                            color = currentColor.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, currentColor.copy(alpha = 0.35f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Tag Visual",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = currentColor
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(100.dp),
+                            color = currentColor,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Botão Principal",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            // Digitação direta do Código HEX
+            OutlinedTextField(
+                value = hexInputText,
+                onValueChange = { input ->
+                    hexInputText = input
+                    val clean = input.trim().removePrefix("#")
+                    if (clean.length == 6) {
+                        try {
+                            val parsedLong = clean.toLong(16)
+                            val pr = ((parsedLong shr 16) and 0xFF).toInt()
+                            val pg = ((parsedLong shr 8) and 0xFF).toInt()
+                            val pb = (parsedLong and 0xFF).toInt()
+                            val nhsv = FloatArray(3)
+                            android.graphics.Color.RGBToHSV(pr, pg, pb, nhsv)
+                            hue = nhsv[0]
+                            saturation = nhsv[1]
+                            value = nhsv[2]
+                            hexInputError = false
+                        } catch (e: Exception) {
+                            hexInputError = true
+                        }
+                    } else {
+                        hexInputError = input.isNotEmpty() && input != "#"
+                    }
+                },
+                label = { Text("Código Hexadecimal") },
+                placeholder = { Text("#B76E79") },
+                singleLine = true,
+                isError = hexInputError,
+                supportingText = if (hexInputError) {
+                    { Text("Digite um código hexadecimal válido (ex: #E07A5F)") }
+                } else null,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = null,
+                        tint = currentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // Slider 1: Matiz (Hue Rainbow Track)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Matiz / Tom (Hue)",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${hue.toInt()}°",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Red,
+                                    Color.Yellow,
+                                    Color.Green,
+                                    Color.Cyan,
+                                    Color.Blue,
+                                    Color.Magenta,
+                                    Color.Red
+                                )
+                            )
+                        )
+                )
+
+                Slider(
+                    value = hue,
+                    onValueChange = { hue = it },
+                    valueRange = 0f..360f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = currentColor,
+                        activeTrackColor = Color.Transparent,
+                        inactiveTrackColor = Color.Transparent
+                    )
+                )
+            }
+
+            // Slider 2: Saturação
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Saturação / Intensidade",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${(saturation * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Gray,
+                                    Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, value)))
+                                )
+                            )
+                        )
+                )
+
+                Slider(
+                    value = saturation,
+                    onValueChange = { saturation = it },
+                    valueRange = 0.05f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = currentColor,
+                        activeTrackColor = Color.Transparent,
+                        inactiveTrackColor = Color.Transparent
+                    )
+                )
+            }
+
+            // Slider 3: Luminosidade
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Luminosidade / Brilho",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${(value * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Black,
+                                    Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, 1f)))
+                                )
+                            )
+                        )
+                )
+
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = 0.15f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = currentColor,
+                        activeTrackColor = Color.Transparent,
+                        inactiveTrackColor = Color.Transparent
+                    )
+                )
+            }
+
+            // Sugestões de Paleta Rápida
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Sugestões de Designers",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                val quickSwatches = listOf(
+                    0xFFB76E79L, // Rose Gold Clássico
+                    0xFFFF6B6BL, // Coral Red
+                    0xFFFF9F43L, // Laranja Sol
+                    0xFFFECA57L, // Amarelo Dourado
+                    0xFF10AC84L, // Verde Jade
+                    0xFF1DD1A1L, // Menta Pastel
+                    0xFF48DBFBL, // Azul Celeste
+                    0xFF2E86DEL, // Azul Real
+                    0xFF5F27CDL, // Roxo Deep
+                    0xFFF368E0L, // Rosa Neon
+                    0xFF8395A7L, // Titânio Slate
+                    0xFF00D2D3L, // Verde Água
+                    0xFFE056FDL, // Lavanda
+                    0xFFFF7979L, // Pêssego
+                    0xFF6C5CE7L, // Iris Elétrica
+                    0xFFE17055L  // Terracota
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    for (swatch in quickSwatches) {
+                        val swColor = Color(swatch or 0xFF000000L)
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(swColor)
+                                .border(
+                                    width = if (currentHexStr.equals(String.format("#%06X", 0xFFFFFF and swatch.toInt()), ignoreCase = true)) 3.dp else 1.dp,
+                                    color = if (currentHexStr.equals(String.format("#%06X", 0xFFFFFF and swatch.toInt()), ignoreCase = true)) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surface,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    val sr = ((swatch shr 16) and 0xFF).toInt()
+                                    val sg = ((swatch shr 8) and 0xFF).toInt()
+                                    val sb = (swatch and 0xFF).toInt()
+                                    val nhsv = FloatArray(3)
+                                    android.graphics.Color.RGBToHSV(sr, sg, sb, nhsv)
+                                    hue = nhsv[0]
+                                    saturation = nhsv[1]
+                                    value = nhsv[2]
+                                }
+                        )
+                    }
+                }
+            }
+
             Button(
                 onClick = {
                     val finalHex = 0xFF000000L or (0xFFFFFFL and currentRgbInt.toLong())
                     onColorSelected(finalHex)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = currentColor),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -2670,11 +2763,6 @@ private fun CustomColorPickerDialog(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Aplicar no App", color = Color.White, fontWeight = FontWeight.Bold)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text("Cancelar")
-            }
         }
-    )
+    }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.CreditCardEntity
+import com.example.data.local.ImportedNotificationEntity
 import com.example.data.local.NotificationItemEntity
 import com.example.data.local.TransactionEntity
 import com.example.data.model.Categories
@@ -15,6 +16,7 @@ import com.example.data.preferences.AppThemeColor
 import com.example.data.preferences.UserPreferences
 import com.example.data.repository.CategoryRepository
 import com.example.data.repository.CreditCardRepository
+import com.example.data.repository.ImportedNotificationRepository
 import com.example.data.repository.NotificationRepository
 import com.example.data.repository.TransactionRepository
 import com.example.util.CreditCardBillingHelper
@@ -159,6 +161,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val cardRepository: CreditCardRepository
     private val categoryRepository: CategoryRepository
     private val notificationRepository: NotificationRepository
+    val importedNotificationRepository: ImportedNotificationRepository
     private val userPreferences: UserPreferences = UserPreferences.getInstance(application)
     val p2pSyncManager: com.example.data.p2p.P2PSyncManager
 
@@ -184,6 +187,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     val allNotifications: StateFlow<List<NotificationItemEntity>>
     val unreadNotificationCount: StateFlow<Int>
+
+    // Bank Notification Imports
+    val pendingImportedNotifications: StateFlow<List<ImportedNotificationEntity>>
+    val allImportedNotifications: StateFlow<List<ImportedNotificationEntity>>
+    val pendingImportedCount: StateFlow<Int>
 
     val p2pSyncStatus: StateFlow<com.example.data.p2p.P2PSyncStatus>
 
@@ -251,6 +259,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         cardRepository = CreditCardRepository(db.creditCardDao(), userPreferences, p2pSyncManager)
         categoryRepository = CategoryRepository(db.customCategoryDao(), p2pSyncManager)
         notificationRepository = NotificationRepository(db.notificationDao(), db.transactionDao(), db.creditCardDao(), userPreferences)
+        importedNotificationRepository = ImportedNotificationRepository(db.importedNotificationDao(), db.transactionDao(), db.creditCardDao(), userPreferences)
         backupManager = com.example.data.backup.LocalBackupManager(application, db, userPreferences)
         refreshBackupList()
         checkScheduledBackup()
@@ -261,6 +270,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         unreadNotificationCount = notificationRepository.unreadCount
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+        pendingImportedNotifications = importedNotificationRepository.pendingNotifications
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        allImportedNotifications = importedNotificationRepository.allNotifications
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        pendingImportedCount = importedNotificationRepository.pendingCount
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
         creditCards = cardRepository.allCards
@@ -284,7 +302,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             // Restore P2P if previously enabled
             val savedKey = userPreferences.p2pSyncKey.value
             if (userPreferences.p2pSyncEnabled.value && savedKey.isNotBlank()) {
-                p2pSyncManager.startSync(savedKey)
+                p2pSyncManager.startSync(savedKey, userPreferences.getP2PRole())
             }
 
             // Automatic background check for new releases on startup
@@ -1042,12 +1060,23 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // P2P Peer-to-Peer Synchronization
-    fun enableP2PSync(syncKey: String) {
+    fun enableP2PSync(syncKey: String, role: com.example.data.p2p.P2PRole = com.example.data.p2p.P2PRole.HOST) {
         val cleanKey = syncKey.trim().uppercase()
         if (cleanKey.isBlank()) return
+        val currentKey = userPreferences.p2pSyncKey.value
+        val isNewKey = currentKey != cleanKey
+
         userPreferences.setP2PSyncKey(cleanKey)
+        userPreferences.setP2PRole(role)
         userPreferences.setP2PSyncEnabled(true)
-        p2pSyncManager.startSync(cleanKey)
+
+        if (role == com.example.data.p2p.P2PRole.HOST) {
+            userPreferences.setP2PInitialSyncDone(true)
+        } else if (isNewKey) {
+            userPreferences.setP2PInitialSyncDone(false)
+        }
+
+        p2pSyncManager.startSync(cleanKey, role)
     }
 
     fun disableP2PSync() {
@@ -1293,5 +1322,50 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun setNotificationTime(hour: Int, minute: Int) {
         userPreferences.setNotificationTime(hour, minute)
         NotificationManagerHelper.scheduleDailyAlarm(getApplication())
+    }
+
+    // Bank Notification Actions
+    fun confirmAndImportNotification(
+        notificationId: Long,
+        merchant: String,
+        amount: Double,
+        category: String,
+        cardId: Long?
+    ) {
+        viewModelScope.launch {
+            importedNotificationRepository.confirmAndImport(
+                notificationId = notificationId,
+                customMerchant = merchant,
+                customAmount = amount,
+                customCategory = category,
+                customCardId = cardId
+            )
+        }
+    }
+
+    fun discardImportedNotification(notificationId: Long) {
+        viewModelScope.launch {
+            importedNotificationRepository.discardNotification(notificationId)
+        }
+    }
+
+    fun importAllPendingNotifications() {
+        viewModelScope.launch {
+            pendingImportedNotifications.value.forEach { item ->
+                importedNotificationRepository.confirmAndImport(item.id)
+            }
+        }
+    }
+
+    fun clearImportedNotificationHistory() {
+        viewModelScope.launch {
+            importedNotificationRepository.clearAll()
+        }
+    }
+
+    fun simulateBankNotification(packageName: String, title: String, text: String) {
+        viewModelScope.launch {
+            importedNotificationRepository.processNotification(packageName, title, text, null)
+        }
     }
 }

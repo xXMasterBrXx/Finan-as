@@ -283,6 +283,22 @@ class UserPreferences(context: Context) {
     )
     val p2pSyncKey: StateFlow<String> = _p2pSyncKey.asStateFlow()
 
+    private val _p2pRole = MutableStateFlow(
+        try {
+            com.example.data.p2p.P2PRole.valueOf(
+                prefs.getString(KEY_P2P_ROLE, com.example.data.p2p.P2PRole.HOST.name) ?: com.example.data.p2p.P2PRole.HOST.name
+            )
+        } catch (e: Exception) {
+            com.example.data.p2p.P2PRole.HOST
+        }
+    )
+    val p2pRole: StateFlow<com.example.data.p2p.P2PRole> = _p2pRole.asStateFlow()
+
+    private val _p2pInitialSyncDone = MutableStateFlow(
+        prefs.getBoolean(KEY_P2P_INITIAL_SYNC_DONE, false)
+    )
+    val p2pInitialSyncDone: StateFlow<Boolean> = _p2pInitialSyncDone.asStateFlow()
+
     // Notification Preferences
     private val _notificationsEnabled = MutableStateFlow(
         prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
@@ -328,6 +344,32 @@ class UserPreferences(context: Context) {
         prefs.getInt(KEY_NOTIFICATION_MINUTE, 0)
     )
     val notificationMinute: StateFlow<Int> = _notificationMinute.asStateFlow()
+
+    // Bank Notification Auto Import Preferences
+    private val _autoImportNotificationsEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_IMPORT_NOTIFICATIONS_ENABLED, true)
+    )
+    val autoImportNotificationsEnabled: StateFlow<Boolean> = _autoImportNotificationsEnabled.asStateFlow()
+
+    private val _autoImportMode = MutableStateFlow(
+        prefs.getString(KEY_AUTO_IMPORT_MODE, "CONFIRM") ?: "CONFIRM"
+    )
+    val autoImportMode: StateFlow<String> = _autoImportMode.asStateFlow()
+
+    private val _autoImportCategorizationEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_IMPORT_CATEGORIZATION_ENABLED, true)
+    )
+    val autoImportCategorizationEnabled: StateFlow<Boolean> = _autoImportCategorizationEnabled.asStateFlow()
+
+    private val _autoImportIgnoreDuplicates = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_IMPORT_IGNORE_DUPLICATES, true)
+    )
+    val autoImportIgnoreDuplicates: StateFlow<Boolean> = _autoImportIgnoreDuplicates.asStateFlow()
+
+    private val _autoImportNotifyOnImport = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_IMPORT_NOTIFY_ON_IMPORT, true)
+    )
+    val autoImportNotifyOnImport: StateFlow<Boolean> = _autoImportNotifyOnImport.asStateFlow()
 
     fun isInitialDataSeeded(): Boolean {
         return prefs.getBoolean(KEY_HAS_SEEDED_INITIAL_DATA, false)
@@ -390,6 +432,30 @@ class UserPreferences(context: Context) {
         val clean = key.trim().uppercase()
         prefs.edit().putString(KEY_P2P_SYNC_KEY, clean).apply()
         _p2pSyncKey.value = clean
+    }
+
+    fun setP2PRole(role: com.example.data.p2p.P2PRole) {
+        prefs.edit().putString(KEY_P2P_ROLE, role.name).apply()
+        _p2pRole.value = role
+    }
+
+    fun getP2PRole(): com.example.data.p2p.P2PRole {
+        return try {
+            com.example.data.p2p.P2PRole.valueOf(
+                prefs.getString(KEY_P2P_ROLE, com.example.data.p2p.P2PRole.HOST.name) ?: com.example.data.p2p.P2PRole.HOST.name
+            )
+        } catch (e: Exception) {
+            com.example.data.p2p.P2PRole.HOST
+        }
+    }
+
+    fun setP2PInitialSyncDone(done: Boolean) {
+        prefs.edit().putBoolean(KEY_P2P_INITIAL_SYNC_DONE, done).apply()
+        _p2pInitialSyncDone.value = done
+    }
+
+    fun isP2PInitialSyncDone(): Boolean {
+        return prefs.getBoolean(KEY_P2P_INITIAL_SYNC_DONE, false)
     }
 
     fun setThemeMode(mode: AppThemeMode) {
@@ -457,6 +523,53 @@ class UserPreferences(context: Context) {
         prefs.edit().putString(key, value).apply()
     }
 
+    // Bank Notification Auto Import Getters / Setters
+    fun isAutoImportNotificationsEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_IMPORT_NOTIFICATIONS_ENABLED, true)
+    fun setAutoImportNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_IMPORT_NOTIFICATIONS_ENABLED, enabled).apply()
+        _autoImportNotificationsEnabled.value = enabled
+    }
+
+    fun getAutoImportMode(): String = prefs.getString(KEY_AUTO_IMPORT_MODE, "CONFIRM") ?: "CONFIRM"
+    fun setAutoImportMode(mode: String) {
+        prefs.edit().putString(KEY_AUTO_IMPORT_MODE, mode).apply()
+        _autoImportMode.value = mode
+    }
+
+    fun isAutoImportCategorizationEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_IMPORT_CATEGORIZATION_ENABLED, true)
+    fun setAutoImportCategorizationEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_IMPORT_CATEGORIZATION_ENABLED, enabled).apply()
+        _autoImportCategorizationEnabled.value = enabled
+    }
+
+    fun isIgnoreNotificationDuplicatesEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_IMPORT_IGNORE_DUPLICATES, true)
+    fun setIgnoreNotificationDuplicatesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_IMPORT_IGNORE_DUPLICATES, enabled).apply()
+        _autoImportIgnoreDuplicates.value = enabled
+    }
+
+    fun isNotifyOnImportEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_IMPORT_NOTIFY_ON_IMPORT, true)
+    fun setNotifyOnImportEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_IMPORT_NOTIFY_ON_IMPORT, enabled).apply()
+        _autoImportNotifyOnImport.value = enabled
+    }
+
+    fun getDisabledBankPackages(): Set<String> {
+        val raw = prefs.getString(KEY_AUTO_IMPORT_DISABLED_BANKS, "") ?: ""
+        if (raw.isBlank()) return emptySet()
+        return raw.split(",").map { it.trim() }.toSet()
+    }
+
+    fun toggleDisabledBankPackage(pkg: String) {
+        val current = getDisabledBankPackages().toMutableSet()
+        if (current.contains(pkg)) {
+            current.remove(pkg)
+        } else {
+            current.add(pkg)
+        }
+        prefs.edit().putString(KEY_AUTO_IMPORT_DISABLED_BANKS, current.joinToString(",")).apply()
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_THEME_COLOR = "key_theme_color"
@@ -467,6 +580,8 @@ class UserPreferences(context: Context) {
         private const val KEY_HAS_SEEDED_INITIAL_DATA = "key_has_seeded_initial_data"
         private const val KEY_P2P_SYNC_ENABLED = "key_p2p_sync_enabled"
         private const val KEY_P2P_SYNC_KEY = "key_p2p_sync_key"
+        private const val KEY_P2P_ROLE = "key_p2p_role"
+        private const val KEY_P2P_INITIAL_SYNC_DONE = "key_p2p_initial_sync_done"
         private const val KEY_BACKUP_INTERVAL = "key_backup_interval"
         private const val KEY_LAST_BACKUP_TIMESTAMP = "key_last_backup_timestamp"
         private const val KEY_GITHUB_REPO = "key_github_repo"
@@ -479,6 +594,12 @@ class UserPreferences(context: Context) {
         private const val KEY_NOTIFICATION_ADVANCE_DAYS = "key_notification_advance_days"
         private const val KEY_NOTIFICATION_HOUR = "key_notification_hour"
         private const val KEY_NOTIFICATION_MINUTE = "key_notification_minute"
+        private const val KEY_AUTO_IMPORT_NOTIFICATIONS_ENABLED = "key_auto_import_notifications_enabled"
+        private const val KEY_AUTO_IMPORT_MODE = "key_auto_import_mode"
+        private const val KEY_AUTO_IMPORT_CATEGORIZATION_ENABLED = "key_auto_import_categorization_enabled"
+        private const val KEY_AUTO_IMPORT_IGNORE_DUPLICATES = "key_auto_import_ignore_duplicates"
+        private const val KEY_AUTO_IMPORT_NOTIFY_ON_IMPORT = "key_auto_import_notify_on_import"
+        private const val KEY_AUTO_IMPORT_DISABLED_BANKS = "key_auto_import_disabled_banks"
 
         @Volatile
         private var instance: UserPreferences? = null

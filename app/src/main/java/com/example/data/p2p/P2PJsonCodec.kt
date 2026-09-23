@@ -8,7 +8,7 @@ import org.json.JSONObject
 
 object P2PJsonCodec {
 
-    fun transactionToJson(tx: TransactionEntity): JSONObject {
+    fun transactionToJson(tx: TransactionEntity, cardSyncUuid: String? = null): JSONObject {
         return JSONObject().apply {
             put("syncUuid", tx.syncUuid)
             put("title", tx.title)
@@ -18,6 +18,7 @@ object P2PJsonCodec {
             put("timestamp", tx.timestamp)
             put("note", tx.note)
             put("cardId", tx.cardId ?: JSONObject.NULL)
+            put("cardSyncUuid", cardSyncUuid ?: JSONObject.NULL)
             put("isInstallment", tx.isInstallment)
             put("installmentNumber", tx.installmentNumber)
             put("totalInstallments", tx.totalInstallments)
@@ -50,6 +51,10 @@ object P2PJsonCodec {
             updatedAt = json.optLong("updatedAt", System.currentTimeMillis()),
             isDeleted = json.optBoolean("isDeleted", false)
         )
+    }
+
+    fun extractCardSyncUuid(json: JSONObject): String? {
+        return if (json.isNull("cardSyncUuid") || json.optString("cardSyncUuid").isBlank()) null else json.optString("cardSyncUuid")
     }
 
     fun cardToJson(card: CreditCardEntity): JSONObject {
@@ -109,22 +114,38 @@ object P2PJsonCodec {
     }
 
     // Packet creation
-    fun createHandshake(senderId: String, senderName: String, keyHash: String): JSONObject {
+    fun createHandshake(
+        senderId: String,
+        senderName: String,
+        keyHash: String,
+        role: P2PRole = P2PRole.CLIENT,
+        isInitialSyncDone: Boolean = false
+    ): JSONObject {
         return JSONObject().apply {
             put("type", "HANDSHAKE")
             put("senderId", senderId)
             put("senderName", senderName)
             put("keyHash", keyHash)
+            put("role", role.name)
+            put("isInitialSyncDone", isInitialSyncDone)
             put("timestamp", System.currentTimeMillis())
         }
     }
 
-    fun createHandshakeAck(senderId: String, senderName: String, status: String): JSONObject {
+    fun createHandshakeAck(
+        senderId: String,
+        senderName: String,
+        status: String,
+        role: P2PRole = P2PRole.HOST,
+        isInitialSyncDone: Boolean = true
+    ): JSONObject {
         return JSONObject().apply {
             put("type", "HANDSHAKE_ACK")
             put("senderId", senderId)
             put("senderName", senderName)
             put("status", status)
+            put("role", role.name)
+            put("isInitialSyncDone", isInitialSyncDone)
             put("timestamp", System.currentTimeMillis())
         }
     }
@@ -137,14 +158,56 @@ object P2PJsonCodec {
         }
     }
 
+    fun createSnapshotOverwrite(
+        senderId: String,
+        transactions: List<TransactionEntity>,
+        cards: List<CreditCardEntity>,
+        categories: List<CustomCategoryEntity>,
+        cardSyncUuidMap: Map<Long, String> = emptyMap()
+    ): JSONObject {
+        val txArray = JSONArray()
+        transactions.forEach { tx ->
+            val cardSyncUuid = tx.cardId?.let { cardSyncUuidMap[it] }
+            txArray.put(transactionToJson(tx, cardSyncUuid))
+        }
+
+        val cardsArray = JSONArray()
+        cards.forEach { cardsArray.put(cardToJson(it)) }
+
+        val catArray = JSONArray()
+        categories.forEach { catArray.put(categoryToJson(it)) }
+
+        return JSONObject().apply {
+            put("type", "SNAPSHOT_OVERWRITE")
+            put("senderId", senderId)
+            put("transactions", txArray)
+            put("cards", cardsArray)
+            put("categories", catArray)
+            put("timestamp", System.currentTimeMillis())
+        }
+    }
+
+    fun createSnapshotAck(senderId: String, count: Int): JSONObject {
+        return JSONObject().apply {
+            put("type", "SNAPSHOT_ACK")
+            put("senderId", senderId)
+            put("count", count)
+            put("timestamp", System.currentTimeMillis())
+        }
+    }
+
     fun createSyncResponse(
         senderId: String,
         transactions: List<TransactionEntity>,
         cards: List<CreditCardEntity>,
-        categories: List<CustomCategoryEntity>
+        categories: List<CustomCategoryEntity>,
+        cardSyncUuidMap: Map<Long, String> = emptyMap()
     ): JSONObject {
         val txArray = JSONArray()
-        transactions.forEach { txArray.put(transactionToJson(it)) }
+        transactions.forEach { tx ->
+            val cardSyncUuid = tx.cardId?.let { cardSyncUuidMap[it] }
+            txArray.put(transactionToJson(tx, cardSyncUuid))
+        }
 
         val cardsArray = JSONArray()
         cards.forEach { cardsArray.put(cardToJson(it)) }
@@ -162,11 +225,11 @@ object P2PJsonCodec {
         }
     }
 
-    fun createTxUpsert(senderId: String, tx: TransactionEntity): JSONObject {
+    fun createTxUpsert(senderId: String, tx: TransactionEntity, cardSyncUuid: String? = null): JSONObject {
         return JSONObject().apply {
             put("type", "TX_UPSERT")
             put("senderId", senderId)
-            put("transaction", transactionToJson(tx))
+            put("transaction", transactionToJson(tx, cardSyncUuid))
             put("timestamp", System.currentTimeMillis())
         }
     }

@@ -41,6 +41,8 @@ import com.example.data.p2p.P2PSyncStatus
 import com.example.ui.theme.ExpenseRed
 import com.example.ui.theme.IncomeGreen
 
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
 fun P2PStatusBadge(
     status: P2PSyncStatus,
@@ -61,10 +63,10 @@ fun P2PStatusBadge(
 
     val (badgeColor, labelText) = when {
         !status.isEnabled -> Pair(Color.Gray, "P2P Off")
-        status.state == P2PConnectionState.CONNECTED -> Pair(IncomeGreen, "P2P Conectado (${status.connectedPeers.size})")
-        status.state == P2PConnectionState.SYNCING -> Pair(EmeraldPrimary, "P2P Sinc...")
-        status.state == P2PConnectionState.SEARCHING -> Pair(Color(0xFFFFB300), "P2P Buscando")
-        status.state == P2PConnectionState.ERROR -> Pair(ExpenseRed, "P2P Erro")
+        status.state == P2PConnectionState.CONNECTED -> Pair(IncomeGreen, "P2P (${status.connectedPeers.size})")
+        status.state == P2PConnectionState.SYNCING -> Pair(EmeraldPrimary, "Sinc...")
+        status.state == P2PConnectionState.SEARCHING -> Pair(Color(0xFFFFB300), "Buscando")
+        status.state == P2PConnectionState.ERROR -> Pair(ExpenseRed, "Erro")
         else -> Pair(Color.Gray, "P2P")
     }
 
@@ -82,13 +84,13 @@ fun P2PStatusBadge(
         shape = RoundedCornerShape(20.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(7.dp)
                     .clip(CircleShape)
                     .background(badgeColor)
                     .then(
@@ -102,14 +104,16 @@ fun P2PStatusBadge(
                 imageVector = Icons.Default.Sync,
                 contentDescription = "P2P Sync",
                 tint = badgeColor,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(13.dp)
             )
 
             Text(
                 text = labelText,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 fontWeight = FontWeight.Bold,
-                color = badgeColor
+                color = badgeColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

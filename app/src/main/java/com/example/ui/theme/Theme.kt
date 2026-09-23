@@ -9,10 +9,18 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.preferences.AppThemeMode
 import com.example.data.preferences.AppThemeColor
+
+val LocalAppThemeColor = staticCompositionLocalOf { AppThemeColor.EMERALD }
+val LocalThemeGradient = staticCompositionLocalOf {
+    Brush.linearGradient(listOf(Color(0xFF00A86B), Color(0xFF34D399)))
+}
 
 private val DarkColorScheme = darkColorScheme(
     primary = EmeraldLight,
@@ -128,7 +136,7 @@ fun MyApplicationTheme(
             val lightHsv = floatArrayOf(
                 hsv[0],
                 hsv[1].coerceAtLeast(0.65f),
-                (hsv[2] * 0.9f).coerceIn(0.45f, 0.85f)
+                (hsv[2] * 0.9f).coerceIn(0.35f, 0.75f)
             )
             primaryVal = Color(android.graphics.Color.HSVToColor(lightHsv))
             val contHsv = floatArrayOf(hsv[0], 0.16f, 0.96f)
@@ -138,7 +146,7 @@ fun MyApplicationTheme(
     } else {
         primaryVal = Color(if (isDark) themeColor.primaryDarkHex else themeColor.primaryLightHex)
         containerVal = Color(if (isDark) themeColor.containerDarkHex else themeColor.containerLightHex)
-        onContainerVal = Color(if (isDark) 0xFFFFFFFF else themeColor.primaryDarkHex)
+        onContainerVal = if (isDark) Color.White else Color(themeColor.primaryLightHex)
     }
 
     val baseColorScheme: ColorScheme = when (themeMode) {
@@ -151,16 +159,34 @@ fun MyApplicationTheme(
 
     val colorScheme = baseColorScheme.copy(
         primary = primaryVal,
+        onPrimary = Color.White,
         primaryContainer = containerVal,
         onPrimaryContainer = onContainerVal,
         secondary = primaryVal,
         onSecondary = Color.White,
-        tertiary = primaryVal
+        secondaryContainer = containerVal,
+        onSecondaryContainer = onContainerVal,
+        tertiary = primaryVal,
+        tertiaryContainer = containerVal,
+        onTertiaryContainer = onContainerVal,
+        surfaceTint = primaryVal
     )
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val themeBrush = if (themeColor.isGradient && themeColor.gradientColors.size >= 2) {
+        Brush.linearGradient(themeColor.gradientColors.map { Color(it) })
+    } else {
+        Brush.linearGradient(listOf(primaryVal, primaryVal))
+    }
+
+    CompositionLocalProvider(
+        LocalAppThemeColor provides themeColor,
+        LocalThemeGradient provides themeBrush
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
+

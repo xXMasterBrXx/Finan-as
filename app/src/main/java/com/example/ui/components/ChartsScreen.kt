@@ -102,13 +102,13 @@ import kotlin.math.abs
  */
 @Composable
 fun ChartsScreen(
-    currentPeriod: MonthPeriod,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit,
-    onGoToCurrentMonth: () -> Unit,
     monthlyAnalytics: MonthlyAnalytics,
     advancedAnalytics: AdvancedAnalytics,
     hideBalances: Boolean = false,
+    currentPeriod: MonthPeriod? = null,
+    onPreviousMonth: (() -> Unit)? = null,
+    onNextMonth: (() -> Unit)? = null,
+    onGoToCurrentMonth: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedChartTab by remember { mutableStateOf(0) }
@@ -117,20 +117,10 @@ fun ChartsScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
             .testTag("charts_screen_content"),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            Spacer(modifier = Modifier.height(4.dp))
-            MonthSelector(
-                period = currentPeriod,
-                onPreviousMonth = onPreviousMonth,
-                onNextMonth = onNextMonth,
-                onGoToCurrentMonth = onGoToCurrentMonth
-            )
-        }
-
         // Sub-tabs navigation for different chart perspectives
         item {
             Surface(

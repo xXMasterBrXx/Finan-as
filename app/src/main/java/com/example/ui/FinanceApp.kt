@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -88,10 +90,12 @@ import com.example.data.model.CategoryItem
 import com.example.data.model.TransactionType
 import com.example.data.preferences.AppThemeColor
 import com.example.ui.components.AnticipateInstallmentsDialog
+import com.example.ui.components.BankImportSettingsSheet
 import com.example.ui.components.CardDialog
 import com.example.ui.components.CardsScreen
 import com.example.ui.components.CategoryDialog
 import com.example.ui.components.ChartsScreen
+import com.example.ui.components.ImportedNotificationsBottomSheet
 import com.example.ui.components.LiquidGlassBottomBar
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.MonthlyExpenseCharts
@@ -155,10 +159,16 @@ fun FinanceApp(
     val notificationHour by viewModel.notificationHour.collectAsStateWithLifecycle()
     val notificationMinute by viewModel.notificationMinute.collectAsStateWithLifecycle()
 
+    val pendingImportedNotifications by viewModel.pendingImportedNotifications.collectAsStateWithLifecycle()
+    val allImportedNotifications by viewModel.allImportedNotifications.collectAsStateWithLifecycle()
+    val pendingImportedCount by viewModel.pendingImportedCount.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Resumo, 1: Extrato, 2: Gráficos, 3: Cartões, 4: Ajustes
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    var showImportedNotificationsSheet by remember { mutableStateOf(false) }
+    var showBankImportSettingsSheet by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
     var initialCardIdForDialog by remember { mutableStateOf<Long?>(null) }
@@ -269,18 +279,22 @@ fun FinanceApp(
                             ) {
                                 Text(
                                     text = "FinanFlow",
-                                    style = MaterialTheme.typography.titleLarge.copy(
+                                    style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 0.2.sp
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "Tracker Financeiro",
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Medium
                                     ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -288,6 +302,36 @@ fun FinanceApp(
                 },
                 actions = {
                     if (selectedTab != 4) {
+                        IconButton(
+                            onClick = { showImportedNotificationsSheet = true },
+                            modifier = Modifier.testTag("bank_import_bell_icon")
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (pendingImportedCount > 0) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ) {
+                                            Text(
+                                                text = if (pendingImportedCount > 99) "99+" else pendingImportedCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Receipt,
+                                    contentDescription = "Importador de Notificações Bancárias",
+                                    tint = if (pendingImportedCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
                         IconButton(
                             onClick = { showNotificationsSheet = true },
                             modifier = Modifier.testTag("notifications_bell_icon")
@@ -363,8 +407,8 @@ fun FinanceApp(
                     }
                 )
 
-                // Month Selector Header - show on Dashboard, Extrato & Cartões (ChartsScreen has its own internal month navigation)
-                if (selectedTab != 2 && selectedTab != 4) {
+                // Month Selector Header - show on Dashboard, Extrato, Gráficos & Cartões
+                if (selectedTab != 4) {
                     MonthSelector(
                         period = period,
                         onPreviousMonth = { viewModel.previousMonth() },
@@ -556,10 +600,6 @@ fun FinanceApp(
                     2 -> {
                         // Dedicated Charts Screen: Categories, Period Comparison, Category Monthly Averages, 6M Trends, Daily Evolution
                         ChartsScreen(
-                            currentPeriod = period,
-                            onPreviousMonth = { viewModel.previousMonth() },
-                            onNextMonth = { viewModel.nextMonth() },
-                            onGoToCurrentMonth = { viewModel.goToCurrentMonth() },
                             monthlyAnalytics = analytics,
                             advancedAnalytics = advancedAnalytics,
                             hideBalances = hideBalances
@@ -666,6 +706,7 @@ fun FinanceApp(
                             notificationMinute = notificationMinute,
                             onNotificationTimeChange = { h, m -> viewModel.setNotificationTime(h, m) },
                             onSendTestNotification = { viewModel.sendTestNotification() },
+                            onOpenBankImportSettings = { showBankImportSettingsSheet = true },
                             onNavigateBack = { selectedTab = 0 }
                         )
                     }
@@ -886,8 +927,8 @@ fun FinanceApp(
     if (showP2PDialog) {
         P2PSyncDialog(
             status = p2pSyncStatus,
-            onEnableSync = { key ->
-                viewModel.enableP2PSync(key)
+            onEnableSync = { key, role ->
+                viewModel.enableP2PSync(key, role)
             },
             onDisableSync = {
                 viewModel.disableP2PSync()
@@ -933,5 +974,45 @@ fun FinanceApp(
             viewModel.sendTestNotification()
         }
     )
+
+    // Modal Sheet for Pending Bank Notification Imports
+    if (showImportedNotificationsSheet) {
+        ImportedNotificationsBottomSheet(
+            pendingNotifications = pendingImportedNotifications,
+            allNotifications = allImportedNotifications,
+            creditCards = creditCards,
+            onDismissRequest = { showImportedNotificationsSheet = false },
+            onConfirmImport = { id, merchant, amount, category, cardId ->
+                viewModel.confirmAndImportNotification(id, merchant, amount, category, cardId)
+            },
+            onDiscard = { id ->
+                viewModel.discardImportedNotification(id)
+            },
+            onImportAll = {
+                viewModel.importAllPendingNotifications()
+            },
+            onClearHistory = {
+                viewModel.clearImportedNotificationHistory()
+            },
+            onSimulateNotification = {
+                viewModel.simulateBankNotification(
+                    "com.nu.production",
+                    "Nubank",
+                    "Compra de R$ 89,90 aprovada no iFood com o cartão final 1234."
+                )
+            }
+        )
+    }
+
+    // Modal Sheet for Bank Import Settings Configuration
+    if (showBankImportSettingsSheet) {
+        BankImportSettingsSheet(
+            userPreferences = com.example.data.preferences.UserPreferences.getInstance(LocalContext.current),
+            onDismissRequest = { showBankImportSettingsSheet = false },
+            onSimulateNotification = { pkg, title, text ->
+                viewModel.simulateBankNotification(pkg, title, text)
+            }
+        )
+    }
 }
 
