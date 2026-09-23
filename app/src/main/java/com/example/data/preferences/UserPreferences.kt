@@ -162,7 +162,51 @@ enum class AppThemeColor(
         containerDarkHex = 0xFF4A1F26,
         isGradient = false,
         gradientColors = emptyList()
-    )
+    ),
+
+    // Compatibilidade Legada
+    TEAL(
+        displayName = "Teal",
+        primaryLightHex = 0xFF0D9488,
+        primaryDarkHex = 0xFF2DD4BF,
+        containerLightHex = 0xFFF0FDFA,
+        containerDarkHex = 0xFF134E4A,
+        isGradient = false,
+        gradientColors = listOf(0xFF0D9488, 0xFF14B8A6, 0xFF2DD4BF)
+    ),
+    CYBER_VIOLET(
+        displayName = "Cyber Violet",
+        primaryLightHex = 0xFF9333EA,
+        primaryDarkHex = 0xFFC084FC,
+        containerLightHex = 0xFFFAF5FF,
+        containerDarkHex = 0xFF3B0764,
+        isGradient = true,
+        gradientColors = listOf(0xFF8A2387, 0xFFE94057, 0xFFF27121)
+    ),
+    MIDNIGHT_GOLD(
+        displayName = "Midnight Gold",
+        primaryLightHex = 0xFFD97706,
+        primaryDarkHex = 0xFFFBBF24,
+        containerLightHex = 0xFFFEF3C7,
+        containerDarkHex = 0xFF451A03,
+        isGradient = true,
+        gradientColors = listOf(0xFFF7971E, 0xFFFFD200, 0xFFE65C00)
+    );
+
+    fun getBrush(): androidx.compose.ui.graphics.Brush {
+        return if (isGradient && gradientColors.size >= 2) {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                gradientColors.map { androidx.compose.ui.graphics.Color(it) }
+            )
+        } else {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(
+                    androidx.compose.ui.graphics.Color(primaryLightHex),
+                    androidx.compose.ui.graphics.Color(primaryDarkHex)
+                )
+            )
+        }
+    }
 }
 
 class UserPreferences(context: Context) {
