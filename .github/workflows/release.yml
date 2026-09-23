@@ -40,45 +40,80 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Prepare Keystore and Environment
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           touch .env
-          if [ -f debug.keystore.base64 ]; then
-            echo "Restoring debug.keystore from debug.keystore.base64..."
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f debug.keystore ]; then
-            echo "Generating debug.keystore with keytool..."
-            keytool -genkeypair -v -keystore debug.keystore -storepass android \
-              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          chmod +x gradlew
-          ls -la debug.keystore
+          mkdir -p release-output
 
-      - name: Build Debug APK
+          # Se o secret KEYSTORE_BASE64 foi definido no GitHub, use-o
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Restoring my-upload-key.jks from GitHub Secret KEYSTORE_BASE64..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/my-upload-key.jks 2>/dev/null || echo "$KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/my-upload-key.jks
+          elif [ -f my-upload-key.jks.base64 ]; then
+            echo "Restoring my-upload-key.jks from my-upload-key.jks.base64 in repo..."
+            base64 --decode my-upload-key.jks.base64 > ${{ github.workspace }}/my-upload-key.jks 2>/dev/null || base64 -d my-upload-key.jks.base64 > ${{ github.workspace }}/my-upload-key.jks
+          elif [ -f my-upload-key.jks ]; then
+            echo "Using existing my-upload-key.jks in workspace..."
+          fi
+
+          # Fallback para debug.keystore se necessário
+          if [ -f debug.keystore.base64 ]; then
+            base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+          chmod +x gradlew
+
+      - name: Determine Version
+        id: version_step
         run: |
-          TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
-          CLEAN_VERSION=$(echo "$TAG_NAME" | sed -e 's|^refs/tags/||' -e 's|^v||')
+          RAW_TAG="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
+          CLEAN_VERSION=$(echo "$RAW_TAG" | sed -e 's|^refs/tags/||' -e 's|^v||')
           if [ -z "$CLEAN_VERSION" ] || [ "$CLEAN_VERSION" = "main" ] || [ "$CLEAN_VERSION" = "master" ]; then
             CLEAN_VERSION="0.1.2"
           fi
-          echo "Compilando APK com versionName='$CLEAN_VERSION' a partir da tag '$TAG_NAME'"
-          ./gradlew assembleDebug -PversionName="$CLEAN_VERSION" --no-daemon --no-configuration-cache
+          echo "version_name=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$RAW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build Signed Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'finanflow2026' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'finanflow2026' }}
+          APP_VERSION_NAME: ${{ steps.version_step.outputs.version_name }}
+          APP_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          echo "Compilando Release APK: versionName='${{ steps.version_step.outputs.version_name }}', versionCode='${{ github.run_number }}'"
+          if [ -f "$KEYSTORE_PATH" ]; then
+            ./gradlew assembleRelease -PversionName="${{ steps.version_step.outputs.version_name }}" -PversionCode="${{ github.run_number }}" --no-daemon --no-configuration-cache
+          else
+            echo "Aviso: my-upload-key.jks não encontrada, gerando APK com assembleDebug..."
+            ./gradlew assembleDebug -PversionName="${{ steps.version_step.outputs.version_name }}" -PversionCode="${{ github.run_number }}" --no-daemon --no-configuration-cache
+          fi
 
       - name: Prepare APK for Release
         run: |
-          mkdir -p release-output
-          TAG_NAME="${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}"
+          TAG_NAME="${{ steps.version_step.outputs.tag_name }}"
           [ -z "$TAG_NAME" ] && TAG_NAME="0.1.2"
+          CLEAN_VERSION="${{ steps.version_step.outputs.version_name }}"
 
-          # Find the generated APK
-          APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            cp "$APK_PATH" "release-output/FinanFlow-${TAG_NAME}.apk"
-            cp "$APK_PATH" "release-output/app-debug.apk"
+          # Procura o APK gerado (Release prioritário, senão Debug)
+          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" 2>/dev/null | head -n 1)
+
+          if [ -n "$RELEASE_APK" ] && [ -f "$RELEASE_APK" ]; then
+            echo "Encontrado Release APK: $RELEASE_APK"
+            cp "$RELEASE_APK" "release-output/FinanFlow-${TAG_NAME}.apk"
+            cp "$RELEASE_APK" "release-output/app-release.apk"
+          elif [ -n "$DEBUG_APK" ] && [ -f "$DEBUG_APK" ]; then
+            echo "Encontrado Debug APK: $DEBUG_APK"
+            cp "$DEBUG_APK" "release-output/FinanFlow-${TAG_NAME}.apk"
+            cp "$DEBUG_APK" "release-output/app-release.apk"
           else
             echo "Error: No APK file found in app/build/outputs/apk/"
             exit 1
           fi
+          ls -lh release-output/
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -91,7 +126,7 @@ jobs:
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          tag_name: ${{ steps.version_step.outputs.tag_name }}
           files: release-output/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
