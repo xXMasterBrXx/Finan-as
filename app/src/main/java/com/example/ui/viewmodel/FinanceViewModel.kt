@@ -41,6 +41,16 @@ data class DailySpend(
     val incomeAmount: Double = 0.0 // Daily income (verde)
 )
 
+data class UpcomingScheduleData(
+    val daysAhead: Int = 15,
+    val totalExpenses: Double = 0.0,
+    val totalIncomes: Double = 0.0,
+    val netBalance: Double = 0.0,
+    val transactions: List<TransactionEntity> = emptyList(),
+    val expenseCount: Int = 0,
+    val incomeCount: Int = 0
+)
+
 data class MonthPeriod(
     val year: Int,
     val month: Int // 0-based Calendar.MONTH
@@ -79,6 +89,51 @@ data class MonthPeriod(
             return cal.getActualMaximum(Calendar.DAY_OF_MONTH)
         }
 }
+
+data class MonthlyTrendPoint(
+    val year: Int,
+    val month: Int,
+    val label: String,
+    val totalExpense: Double,
+    val totalIncome: Double,
+    val netBalance: Double
+)
+
+data class CategoryMonthlyAverage(
+    val category: CategoryItem,
+    val averageMonthlyAmount: Double,
+    val totalAmount: Double,
+    val currentMonthAmount: Double,
+    val diffFromAveragePercent: Float, // +15% or -10%
+    val monthCountWithSpend: Int
+)
+
+data class PeriodComparisonData(
+    val currentPeriodLabel: String,
+    val previousPeriodLabel: String,
+    val currentExpense: Double,
+    val previousExpense: Double,
+    val currentIncome: Double,
+    val previousIncome: Double,
+    val expenseDiffPercent: Float, // e.g. +12.5% or -5.0%
+    val incomeDiffPercent: Float,
+    val categoryDiffs: List<CategoryComparisonItem> = emptyList()
+)
+
+data class CategoryComparisonItem(
+    val category: CategoryItem,
+    val currentAmount: Double,
+    val previousAmount: Double,
+    val diffAmount: Double,
+    val diffPercent: Float
+)
+
+data class AdvancedAnalytics(
+    val trendMonths: List<MonthlyTrendPoint> = emptyList(),
+    val categoryAverages: List<CategoryMonthlyAverage> = emptyList(),
+    val comparison: PeriodComparisonData? = null,
+    val monthsAnalyzedCount: Int = 6
+)
 
 data class MonthlyAnalytics(
     val totalIncome: Double = 0.0,
@@ -260,6 +315,57 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val allTransactions: StateFlow<List<TransactionEntity>> = repository.allTransactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Upcoming scheduled transactions range (7, 15, 30 days)
+    private val _upcomingDaysRange = MutableStateFlow(15)
+    val upcomingDaysRange: StateFlow<Int> = _upcomingDaysRange.asStateFlow()
+
+    fun setUpcomingDaysRange(days: Int) {
+        _upcomingDaysRange.value = days
+    }
+
+    val upcomingScheduleData: StateFlow<UpcomingScheduleData> = combine(
+        allTransactions,
+        _upcomingDaysRange
+    ) { transactions, daysAhead ->
+        val now = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStart = now.timeInMillis
+
+        val endCal = Calendar.getInstance().apply {
+            timeInMillis = todayStart
+            add(Calendar.DAY_OF_YEAR, daysAhead)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+        val endMillis = endCal.timeInMillis
+
+        val upcoming = transactions
+            .filter { !it.isDeleted && it.timestamp in todayStart..endMillis }
+            .sortedBy { it.timestamp }
+
+        val expenses = upcoming.filter { it.type == TransactionType.EXPENSE.name }
+        val incomes = upcoming.filter { it.type == TransactionType.INCOME.name }
+
+        val totalExp = expenses.sumOf { it.amount }
+        val totalInc = incomes.sumOf { it.amount }
+
+        UpcomingScheduleData(
+            daysAhead = daysAhead,
+            totalExpenses = totalExp,
+            totalIncomes = totalInc,
+            netBalance = totalInc - totalExp,
+            transactions = upcoming,
+            expenseCount = expenses.size,
+            incomeCount = incomes.size
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UpcomingScheduleData())
+
     // Analytics state computed automatically with carry-over and cash outflow vs accrual
     val monthlyAnalytics: StateFlow<MonthlyAnalytics> = combine(
         allTransactions,
@@ -424,6 +530,188 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             pendingCardExpenses = pendingCardExpensesSum
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MonthlyAnalytics())
+
+    // Advanced Multi-Month & Period Comparison Analytics (for the dedicated Charts screen)
+    val advancedAnalytics: StateFlow<AdvancedAnalytics> = combine(
+        allTransactions,
+        _currentPeriod,
+        customCategories
+    ) { transactions, period, customCats ->
+        val activeTx = transactions.filter { !it.isDeleted }
+
+        // 1. Generate last 6 months trend points ending at the current period
+        val trendPoints = mutableListOf<MonthlyTrendPoint>()
+        val cal = Calendar.getInstance()
+        val monthShortNames = arrayOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
+
+        for (i in 5 downTo 0) {
+            cal.set(Calendar.YEAR, period.year)
+            cal.set(Calendar.MONTH, period.month)
+            cal.add(Calendar.MONTH, -i)
+            val pYear = cal.get(Calendar.YEAR)
+            val pMonth = cal.get(Calendar.MONTH)
+
+            val pStart = Calendar.getInstance().apply {
+                set(Calendar.YEAR, pYear)
+                set(Calendar.MONTH, pMonth)
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
+            val pEnd = Calendar.getInstance().apply {
+                set(Calendar.YEAR, pYear)
+                set(Calendar.MONTH, pMonth)
+                set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 999)
+            }.timeInMillis
+
+            val inPeriodTx = activeTx.filter { it.timestamp in pStart..pEnd }
+            val exp = inPeriodTx.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+            val inc = inPeriodTx.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+
+            trendPoints.add(
+                MonthlyTrendPoint(
+                    year = pYear,
+                    month = pMonth,
+                    label = "${monthShortNames[pMonth]}/${(pYear % 100).toString().padStart(2, '0')}",
+                    totalExpense = exp,
+                    totalIncome = inc,
+                    netBalance = inc - exp
+                )
+            )
+        }
+
+        // 2. Calculate Category Monthly Averages over the last 6 months
+        val monthsAnalyzed = 6
+        val categoryExpensesLastMonths = mutableMapOf<String, Double>()
+        val categoryMonthsActive = mutableMapOf<String, MutableSet<String>>()
+        val currentMonthCategoryExpenses = mutableMapOf<String, Double>()
+
+        val sixMonthsAgoStart = Calendar.getInstance().apply {
+            set(Calendar.YEAR, period.year)
+            cal.set(Calendar.MONTH, period.month)
+            add(Calendar.MONTH, -5)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        for (tx in activeTx) {
+            if (tx.type != TransactionType.EXPENSE.name) continue
+            if (tx.timestamp in sixMonthsAgoStart..period.endEpoch) {
+                categoryExpensesLastMonths[tx.category] = (categoryExpensesLastMonths[tx.category] ?: 0.0) + tx.amount
+
+                cal.timeInMillis = tx.timestamp
+                val monthKey = "${cal.get(Calendar.YEAR)}_${cal.get(Calendar.MONTH)}"
+                val set = categoryMonthsActive.getOrPut(tx.category) { mutableSetOf() }
+                set.add(monthKey)
+            }
+            if (tx.timestamp in period.startEpoch..period.endEpoch) {
+                currentMonthCategoryExpenses[tx.category] = (currentMonthCategoryExpenses[tx.category] ?: 0.0) + tx.amount
+            }
+        }
+
+        val categoryAverages = categoryExpensesLastMonths.map { (catName, totalSpend) ->
+            val catItem = Categories.getCategoryByName(catName, TransactionType.EXPENSE, customCats)
+            val avg = totalSpend / monthsAnalyzed
+            val cur = currentMonthCategoryExpenses[catName] ?: 0.0
+            val diffPct = if (avg > 0) (((cur - avg) / avg) * 100).toFloat() else 0f
+            CategoryMonthlyAverage(
+                category = catItem,
+                averageMonthlyAmount = avg,
+                totalAmount = totalSpend,
+                currentMonthAmount = cur,
+                diffFromAveragePercent = diffPct,
+                monthCountWithSpend = categoryMonthsActive[catName]?.size ?: 0
+            )
+        }.sortedByDescending { it.averageMonthlyAmount }
+
+        // 3. Period Comparison: Current Month vs Previous Month
+        val prevCal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, period.year)
+            set(Calendar.MONTH, period.month)
+            add(Calendar.MONTH, -1)
+        }
+        val prevYear = prevCal.get(Calendar.YEAR)
+        val prevMonth = prevCal.get(Calendar.MONTH)
+
+        val prevStart = Calendar.getInstance().apply {
+            set(Calendar.YEAR, prevYear)
+            set(Calendar.MONTH, prevMonth)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val prevEnd = Calendar.getInstance().apply {
+            set(Calendar.YEAR, prevYear)
+            set(Calendar.MONTH, prevMonth)
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+
+        val curTx = activeTx.filter { it.timestamp in period.startEpoch..period.endEpoch }
+        val prevTx = activeTx.filter { it.timestamp in prevStart..prevEnd }
+
+        val curExpense = curTx.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+        val prevExpense = prevTx.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+        val curIncome = curTx.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+        val prevIncome = prevTx.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+
+        val expDiffPct = if (prevExpense > 0) (((curExpense - prevExpense) / prevExpense) * 100).toFloat() else 0f
+        val incDiffPct = if (prevIncome > 0) (((curIncome - prevIncome) / prevIncome) * 100).toFloat() else 0f
+
+        val allCategoriesSet = (curTx.map { it.category } + prevTx.map { it.category }).toSet()
+        val catDiffs = allCategoriesSet.mapNotNull { catName ->
+            val curAmt = curTx.filter { it.type == TransactionType.EXPENSE.name && it.category.equals(catName, ignoreCase = true) }.sumOf { it.amount }
+            val prevAmt = prevTx.filter { it.type == TransactionType.EXPENSE.name && it.category.equals(catName, ignoreCase = true) }.sumOf { it.amount }
+
+            if (curAmt > 0 || prevAmt > 0) {
+                val catItem = Categories.getCategoryByName(catName, TransactionType.EXPENSE, customCats)
+                val diffAmt = curAmt - prevAmt
+                val pct = if (prevAmt > 0) (((curAmt - prevAmt) / prevAmt) * 100).toFloat() else 100f
+                CategoryComparisonItem(
+                    category = catItem,
+                    currentAmount = curAmt,
+                    previousAmount = prevAmt,
+                    diffAmount = diffAmt,
+                    diffPercent = pct
+                )
+            } else null
+        }.sortedByDescending { kotlin.math.abs(it.diffAmount) }
+
+        val comparison = PeriodComparisonData(
+            currentPeriodLabel = "${monthShortNames[period.month]}/${period.year}",
+            previousPeriodLabel = "${monthShortNames[prevMonth]}/${prevYear}",
+            currentExpense = curExpense,
+            previousExpense = prevExpense,
+            currentIncome = curIncome,
+            previousIncome = prevIncome,
+            expenseDiffPercent = expDiffPct,
+            incomeDiffPercent = incDiffPct,
+            categoryDiffs = catDiffs
+        )
+
+        AdvancedAnalytics(
+            trendMonths = trendPoints,
+            categoryAverages = categoryAverages,
+            comparison = comparison,
+            monthsAnalyzedCount = monthsAnalyzed
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AdvancedAnalytics())
 
     // Aggregated cards with their monthly invoice expenses
     val cardsWithExpenses: StateFlow<List<CardWithExpenses>> = combine(

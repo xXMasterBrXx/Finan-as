@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,16 +32,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -82,6 +87,7 @@ import com.example.ui.components.AnticipateInstallmentsDialog
 import com.example.ui.components.CardDialog
 import com.example.ui.components.CardsScreen
 import com.example.ui.components.CategoryDialog
+import com.example.ui.components.ChartsScreen
 import com.example.ui.components.LiquidGlassBottomBar
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.MonthlyExpenseCharts
@@ -93,6 +99,7 @@ import com.example.ui.components.TopUpdateBanner
 import com.example.ui.components.TransactionDialog
 import com.example.ui.components.TransactionItem
 import com.example.ui.components.TransactionList
+import com.example.ui.components.UpcomingScheduleCard
 import com.example.ui.viewmodel.FinanceViewModel
 import kotlinx.coroutines.launch
 
@@ -104,6 +111,7 @@ fun FinanceApp(
     val coroutineScope = rememberCoroutineScope()
     val period by viewModel.currentPeriod.collectAsStateWithLifecycle()
     val analytics by viewModel.monthlyAnalytics.collectAsStateWithLifecycle()
+    val advancedAnalytics by viewModel.advancedAnalytics.collectAsStateWithLifecycle()
     val filteredTransactions by viewModel.filteredMonthlyTransactions.collectAsStateWithLifecycle()
     val monthlyTransactions by viewModel.monthlyTransactions.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -113,6 +121,7 @@ fun FinanceApp(
     val themeColor by viewModel.themeColor.collectAsStateWithLifecycle()
     val monthlyBudgetLimit by viewModel.monthlyBudgetLimit.collectAsStateWithLifecycle()
     val hideBalances by viewModel.hideBalances.collectAsStateWithLifecycle()
+    val upcomingScheduleData by viewModel.upcomingScheduleData.collectAsStateWithLifecycle()
     val creditCards by viewModel.creditCards.collectAsStateWithLifecycle()
     val cardsWithExpenses by viewModel.cardsWithExpenses.collectAsStateWithLifecycle()
     val customCategories by viewModel.customCategories.collectAsStateWithLifecycle()
@@ -131,7 +140,7 @@ fun FinanceApp(
 
     val context = LocalContext.current
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Resumo & Gráficos, 1: Extrato, 2: Cartões, 3: Ajustes
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Resumo, 1: Extrato, 2: Gráficos, 3: Cartões, 4: Ajustes
     var showAddDialog by remember { mutableStateOf(false) }
     var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
     var initialCardIdForDialog by remember { mutableStateOf<Long?>(null) }
@@ -163,47 +172,104 @@ fun FinanceApp(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(36.dp)
+                    if (selectedTab == 4) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 2.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Wallet,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .clickable { selectedTab = 0 }
+                                    .testTag("top_settings_button")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Voltar ao início",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = "Configurações",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        selectedTab = 4
+                                    }
+                                    .testTag("top_settings_button")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Wallet,
+                                        contentDescription = "Acessar Configurações",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(
+                                modifier = Modifier.clickable {
+                                    selectedTab = 4
+                                }
+                            ) {
+                                Text(
+                                    text = "FinanFlow",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.2.sp
+                                    )
+                                )
+                                Text(
+                                    text = "Tracker Financeiro",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "FinanFlow",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.2.sp
-                                )
-                            )
-                            Text(
-                                text = "Tracker Financeiro",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 },
                 actions = {
-                    P2PStatusBadge(
-                        status = p2pSyncStatus,
-                        onClick = { showP2PDialog = true },
-                        modifier = Modifier.padding(end = 12.dp)
-                    )
+                    if (selectedTab != 4) {
+                        IconButton(
+                            onClick = { viewModel.setHideBalances(!hideBalances) },
+                            modifier = Modifier.testTag("toggle_privacy_icon")
+                        ) {
+                            Icon(
+                                imageVector = if (hideBalances) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (hideBalances) "Mostrar saldos" else "Ocultar saldos",
+                                tint = if (hideBalances) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        P2PStatusBadge(
+                            status = p2pSyncStatus,
+                            onClick = { showP2PDialog = true },
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -234,8 +300,8 @@ fun FinanceApp(
                     }
                 )
 
-                // Month Selector Header - show on Dashboard, Extrato & Cartões
-                if (selectedTab != 3) {
+                // Month Selector Header - show on Dashboard, Extrato & Cartões (ChartsScreen has its own internal month navigation)
+                if (selectedTab != 2 && selectedTab != 4) {
                     MonthSelector(
                         period = period,
                         onPreviousMonth = { viewModel.previousMonth() },
@@ -305,11 +371,19 @@ fun FinanceApp(
                                 )
                             }
 
-                            // Automatic Monthly Spending Charts
+                            // Visão resumida dos próximos gastos/entradas programadas
                             item {
-                                MonthlyExpenseCharts(
-                                    analytics = analytics,
-                                    hideBalances = hideBalances
+                                UpcomingScheduleCard(
+                                    data = upcomingScheduleData,
+                                    hideBalances = hideBalances,
+                                    availableCards = creditCards,
+                                    customCategories = customCategories,
+                                    onRangeSelected = { viewModel.setUpcomingDaysRange(it) },
+                                    onEditTransaction = { item ->
+                                        transactionToEdit = item
+                                        initialCardIdForDialog = item.cardId
+                                        showAddDialog = true
+                                    }
                                 )
                             }
 
@@ -417,6 +491,19 @@ fun FinanceApp(
                     }
 
                     2 -> {
+                        // Dedicated Charts Screen: Categories, Period Comparison, Category Monthly Averages, 6M Trends, Daily Evolution
+                        ChartsScreen(
+                            currentPeriod = period,
+                            onPreviousMonth = { viewModel.previousMonth() },
+                            onNextMonth = { viewModel.nextMonth() },
+                            onGoToCurrentMonth = { viewModel.goToCurrentMonth() },
+                            monthlyAnalytics = analytics,
+                            advancedAnalytics = advancedAnalytics,
+                            hideBalances = hideBalances
+                        )
+                    }
+
+                    3 -> {
                         // Credit Cards Screen: Card Management & Invoices
                         CardsScreen(
                             cardsWithExpenses = cardsWithExpenses,
@@ -444,7 +531,7 @@ fun FinanceApp(
                         )
                     }
 
-                    3 -> {
+                    4 -> {
                         // Settings & Preferences Panel
                         SettingsScreen(
                             themeMode = themeMode,
@@ -494,39 +581,22 @@ fun FinanceApp(
                             onDownloadAndInstallApk = { url ->
                                 viewModel.downloadAndInstallApk(context, url)
                             },
-                            onClearUpdateStatus = { viewModel.clearUpdateStatus() }
+                            onClearUpdateStatus = { viewModel.clearUpdateStatus() },
+                            onNavigateBack = { selectedTab = 0 }
                         )
                     }
                 }
             }
         }
 
-        // Apple-style Frosted Glass Backdrop Diffusion for content scrolling behind the bar
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(100.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.40f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.80f),
-                            MaterialTheme.colorScheme.background
-                        )
-                    )
-                )
-        )
-
-        // Floating Action Button & Liquid Glass Bottom Bar
+        // Solid Dock Navigation Bar
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.End
         ) {
-            if (selectedTab == 0 || selectedTab == 1) {
+            if (selectedTab == 0 || selectedTab == 1 || selectedTab == 2) {
                 FloatingActionButton(
                     onClick = {
                         transactionToEdit = null
@@ -544,7 +614,7 @@ fun FinanceApp(
                         tint = Color.White
                     )
                 }
-            } else if (selectedTab == 2) {
+            } else if (selectedTab == 3) {
                 FloatingActionButton(
                     onClick = {
                         cardToEdit = null

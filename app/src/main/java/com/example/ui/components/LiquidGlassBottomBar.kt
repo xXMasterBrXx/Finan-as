@@ -1,8 +1,5 @@
 package com.example.ui.components
 
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -29,42 +26,45 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoGraph
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.ListAlt
+import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.preferences.AppThemeMode
+import com.example.ui.theme.DarkCard
+import com.example.ui.theme.DarkSurface
+import com.example.ui.theme.LightCard
+import com.example.ui.theme.OledCard
+import com.example.ui.theme.WarmLightCard
 
 data class NavigationTabItem(
     val title: String,
@@ -75,10 +75,12 @@ data class NavigationTabItem(
 )
 
 /**
- * Apple-style Liquid Glass floating pill bottom navigation bar.
- * - Compact & ergonomic 56dp pill height with balanced proportions.
- * - Authentic Apple-style frosted glass with specular border sheen and blur.
- * - Smooth sliding indicator capsule that glides across tabs with fluid physics.
+ * Solid Card-Styled Bottom Navigation Bar.
+ * Removed transparency to match the application's card aesthetic across all themes:
+ * - OLED Pure Black: Solid OledCard background with subtle border
+ * - Dark Slate: Solid DarkCard/DarkSurface background
+ * - Warm Light: Solid WarmLightCard background
+ * - Standard Light: Solid LightCard/Surface background with crisp border and elevation
  */
 @Composable
 fun LiquidGlassBottomBar(
@@ -106,148 +108,51 @@ fun LiquidGlassBottomBar(
                 title = "Extrato",
                 selectedIcon = Icons.Filled.ListAlt,
                 unselectedIcon = Icons.Outlined.ListAlt,
-                testTag = "nav_tab_transactions",
-                badgeCount = if (transactionCount > 0) transactionCount else null
+                testTag = "nav_tab_transactions"
+            ),
+            NavigationTabItem(
+                title = "Gráficos",
+                selectedIcon = Icons.Filled.PieChart,
+                unselectedIcon = Icons.Outlined.PieChart,
+                testTag = "nav_tab_charts"
             ),
             NavigationTabItem(
                 title = "Cartões",
                 selectedIcon = Icons.Filled.CreditCard,
                 unselectedIcon = Icons.Outlined.CreditCard,
-                testTag = "nav_tab_cards",
-                badgeCount = if (cardCount > 0) cardCount else null
-            ),
-            NavigationTabItem(
-                title = "Ajustes",
-                selectedIcon = Icons.Filled.Settings,
-                unselectedIcon = Icons.Outlined.Settings,
-                testTag = "nav_tab_settings"
+                testTag = "nav_tab_cards"
             )
         )
     }
 
-    // Apple-style Frosted Glass translucent background layer
-    val frostedLayer = when {
-        isOled -> Brush.verticalGradient(
-            listOf(
-                Color(0xFF141416).copy(alpha = 0.76f),
-                Color(0xFF09090B).copy(alpha = 0.82f)
-            )
-        )
-        isDark -> Brush.verticalGradient(
-            listOf(
-                Color(0xFF1E2D40).copy(alpha = 0.82f),
-                Color(0xFF152232).copy(alpha = 0.88f)
-            )
-        )
-        isWarm -> Brush.verticalGradient(
-            listOf(
-                Color(0xFFFAF7F2).copy(alpha = 0.78f),
-                Color(0xFFEFE8DC).copy(alpha = 0.68f)
-            )
-        )
-        else -> Brush.verticalGradient(
-            listOf(
-                Color(0xFFFFFFFF).copy(alpha = 0.72f),
-                Color(0xFFF1F5F9).copy(alpha = 0.65f)
-            )
-        )
+    // Solid theme-matched container color matching app cards (100% opaque, zero transparency)
+    val cardContainerColor = when {
+        isOled -> OledCard
+        isDark -> DarkCard
+        isWarm -> WarmLightCard
+        else -> LightCard
     }
 
-    // Apple-style Specular Border Highlight (hairline gradient catching top light)
-    val glassBorderBrush = when {
-        isOled -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.32f),
-                Color.White.copy(alpha = 0.06f)
-            )
-        )
-        isDark -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.38f),
-                Color.White.copy(alpha = 0.08f)
-            )
-        )
-        isWarm -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.88f),
-                Color(0xFFDCD4C7).copy(alpha = 0.35f)
-            )
-        )
-        else -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.90f),
-                Color(0xFFCBD5E1).copy(alpha = 0.35f)
-            )
-        )
+    val cardBorderColor = when {
+        isOled -> Color(0xFF222222)
+        isDark -> Color(0xFF243447)
+        isWarm -> Color(0xFFE6DECE)
+        else -> Color(0xFFE2E8F0)
     }
 
-    // Sliding active pill background & border
-    val slidingPillBackground = when {
-        isOled -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.16f),
-                Color.White.copy(alpha = 0.06f)
-            )
-        )
-        isDark -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.18f),
-                Color.White.copy(alpha = 0.08f)
-            )
-        )
-        isWarm -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.96f),
-                Color(0xFFF7F3EB).copy(alpha = 0.88f)
-            )
-        )
-        else -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.95f),
-                Color(0xFFF8FAFC).copy(alpha = 0.88f)
-            )
-        )
+    // Active pill background color
+    val activePillColor = when {
+        isOled -> MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+        isDark -> MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+        isWarm -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     }
 
-    val slidingPillBorder = when {
-        isOled -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.28f),
-                Color.White.copy(alpha = 0.05f)
-            )
-        )
-        isDark -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.32f),
-                Color.White.copy(alpha = 0.06f)
-            )
-        )
-        isWarm -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.95f),
-                Color(0xFFE2D9CB).copy(alpha = 0.50f)
-            )
-        )
-        else -> Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.95f),
-                Color(0xFFE2E8F0).copy(alpha = 0.60f)
-            )
-        )
-    }
-
-    val shadowSpotColor = when {
-        isOled -> Color.Black.copy(alpha = 0.70f)
-        isDark -> Color.Black.copy(alpha = 0.45f)
-        isWarm -> Color(0xFF5A4D3B).copy(alpha = 0.12f)
-        else -> Color(0xFF0F172A).copy(alpha = 0.12f)
-    }
-
-    val shadowAmbientColor = when {
-        isOled -> Color.Black.copy(alpha = 0.35f)
-        isDark -> Color.Black.copy(alpha = 0.25f)
-        isWarm -> Color.Black.copy(alpha = 0.04f)
-        else -> Color.Black.copy(alpha = 0.04f)
+    val activePillBorderColor = when {
+        isOled -> MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)
+        isDark -> MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+        isWarm -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
     }
 
     Box(
@@ -257,82 +162,69 @@ fun LiquidGlassBottomBar(
             .padding(horizontal = 24.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Floating Frosted Glass Pill (Horizontally compact 300dp for a sleek floating dock aesthetic)
-        Surface(
+        // Solid Card Dock Navigation Bar with reduced width and fully rounded corners
+        Card(
             modifier = Modifier
-                .widthIn(max = 300.dp)
-                .fillMaxWidth()
+                .widthIn(max = 330.dp)
+                .fillMaxWidth(0.88f)
                 .height(56.dp)
-                .shadow(
-                    elevation = if (isDark || isOled) 14.dp else 10.dp,
-                    shape = RoundedCornerShape(28.dp),
-                    spotColor = shadowSpotColor,
-                    ambientColor = shadowAmbientColor
-                )
-                .clip(RoundedCornerShape(28.dp))
-                .border(
-                    width = 0.8.dp,
-                    brush = glassBorderBrush,
-                    shape = RoundedCornerShape(28.dp)
-                )
                 .testTag("liquid_glass_bottom_bar"),
-            color = Color.Transparent
+            shape = CircleShape,
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isDark || isOled) 4.dp else 6.dp
+            ),
+            border = CardDefaults.outlinedCardBorder().copy(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.SolidColor(cardBorderColor)
+            )
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val tabCount = tabs.size
                 val tabWidth = maxWidth / tabCount
 
-                // Translucent Apple Frosted Glass Material Tint
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(frostedLayer)
-                )
-
-                // Smooth Sliding Indicator Capsule (Glides across tabs with spring physics)
-                val targetOffset = tabWidth * selectedTab
-                val animatedOffset by animateDpAsState(
-                    targetValue = targetOffset,
+                // Smooth Sliding Active Pill Indicator
+                val safeSelectedTab = selectedTab.coerceIn(0, (tabCount - 1).coerceAtLeast(0))
+                val targetIndicatorOffset = tabWidth * safeSelectedTab
+                val animatedIndicatorOffset by animateDpAsState(
+                    targetValue = targetIndicatorOffset,
                     animationSpec = spring(
-                        dampingRatio = 0.85f, // Smooth Apple-style glide without harsh bounce
+                        dampingRatio = 0.82f,
                         stiffness = Spring.StiffnessMediumLow
                     ),
-                    label = "sliding_pill_glide"
+                    label = "bottom_bar_indicator_offset"
                 )
 
-                Box(
-                    modifier = Modifier
-                        .offset(x = animatedOffset)
-                        .width(tabWidth)
-                        .fillMaxHeight()
-                        .padding(horizontal = 2.5.dp, vertical = 3.dp)
-                        .shadow(
-                            elevation = if (isDark || isOled) 2.dp else 3.dp,
-                            shape = RoundedCornerShape(25.dp),
-                            spotColor = if (isDark || isOled) Color.Black.copy(alpha = 0.45f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            ambientColor = Color.Transparent
-                        )
-                        .clip(RoundedCornerShape(25.dp))
-                        .background(slidingPillBackground)
-                        .border(
-                            width = 0.8.dp,
-                            brush = slidingPillBorder,
-                            shape = RoundedCornerShape(25.dp)
-                        )
-                )
+                // Render Active Sliding Capsule (when a tab inside the bar is selected)
+                if (selectedTab in 0 until tabCount) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = animatedIndicatorOffset)
+                            .width(tabWidth)
+                            .fillMaxHeight()
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
+                            .clip(CircleShape)
+                            .background(activePillColor)
+                            .border(
+                                width = 1.dp,
+                                color = activePillBorderColor,
+                                shape = CircleShape
+                            )
+                    )
+                }
 
-                // Tab items laid out over the sliding capsule
+                // Tabs Row
                 Row(
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     tabs.forEachIndexed { index, tab ->
-                        val isSelected = (selectedTab == index)
+                        val isSelected = selectedTab == index
+                        val interactionSource = remember { MutableInteractionSource() }
 
-                        // Smooth scale & vibrant color animation for icon & label
                         val iconScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.08f else 1.0f,
+                            targetValue = if (isSelected) 1.08f else 0.94f,
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioMediumBouncy,
                                 stiffness = Spring.StiffnessLow
@@ -344,8 +236,7 @@ fun LiquidGlassBottomBar(
                             targetValue = if (isSelected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                if (isDark || isOled) Color(0xFF94A3B8).copy(alpha = 0.70f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                             },
                             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                             label = "tab_color_$index"
@@ -355,9 +246,8 @@ fun LiquidGlassBottomBar(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(25.dp))
                                 .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
+                                    interactionSource = interactionSource,
                                     indication = null
                                 ) {
                                     onTabSelected(index)
@@ -404,12 +294,12 @@ fun LiquidGlassBottomBar(
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(1.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
                                     text = tab.title,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 9.5.sp,
+                                        fontSize = 9.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         letterSpacing = 0.1.sp
                                     ),
