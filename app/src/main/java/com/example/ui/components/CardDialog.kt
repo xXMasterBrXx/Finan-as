@@ -329,7 +329,7 @@ fun CardDialog(
                 )
 
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(PresetCardColors) { (hex, label) ->
@@ -340,40 +340,28 @@ fun CardDialog(
                         }
                         val isSelected = selectedColor.equals(hex, ignoreCase = true)
 
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Box(
                             modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                                    shape = CircleShape
+                                )
                                 .clickable { selectedColor = hex }
-                                .padding(vertical = 2.dp)
+                                .testTag("color_preset_$hex"),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if (isSelected) 3.dp else 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
-                                        shape = CircleShape
-                                    )
-                                    .testTag("color_preset_$hex"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = label,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = label.split(" ").first(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }

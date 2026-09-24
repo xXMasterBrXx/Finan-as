@@ -598,6 +598,7 @@ fun FinanceApp(
                         CardsScreen(
                             cardsWithExpenses = cardsWithExpenses,
                             hideBalances = hideBalances,
+                            currentPeriod = period,
                             onAddNewCard = {
                                 cardToEdit = null
                                 showCardDialog = true
@@ -617,7 +618,10 @@ fun FinanceApp(
                                 initialCardIdForDialog = it.cardId
                                 showAddDialog = true
                             },
-                            onDeleteTransaction = { viewModel.deleteTransaction(it) }
+                            onDeleteTransaction = { viewModel.deleteTransaction(it) },
+                            onToggleInvoicePaid = { cardId, year, month ->
+                                viewModel.toggleInvoicePaid(cardId, year, month)
+                            }
                         )
                     }
 

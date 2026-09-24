@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Calendar
 
 enum class AppThemeMode {
     SYSTEM,
@@ -581,7 +582,60 @@ class UserPreferences(context: Context) {
         prefs.edit().putInt(KEY_LAST_INSTALLED_VERSION_CODE, versionCode).apply()
     }
 
+    // Gerenciamento de Faturas Pagas
+    private val _paidInvoices = MutableStateFlow(
+        prefs.getStringSet(KEY_PAID_INVOICES, emptySet())?.toSet() ?: emptySet()
+    )
+    val paidInvoices: StateFlow<Set<String>> = _paidInvoices.asStateFlow()
+
+    private val _unpaidInvoices = MutableStateFlow(
+        prefs.getStringSet(KEY_UNPAID_INVOICES, emptySet())?.toSet() ?: emptySet()
+    )
+    val unpaidInvoices: StateFlow<Set<String>> = _unpaidInvoices.asStateFlow()
+
+    fun isInvoicePaid(cardId: Long, year: Int, month: Int): Boolean {
+        val key = "${cardId}_${year}_${month}"
+        if (_paidInvoices.value.contains(key)) return true
+        if (_unpaidInvoices.value.contains(key)) return false
+
+        // Liquidação automática de histórico com vencimento superior a 90 dias
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -90)
+        val limitYear = cal.get(Calendar.YEAR)
+        val limitMonth = cal.get(Calendar.MONTH)
+        if (year < limitYear || (year == limitYear && month < limitMonth)) {
+            return true
+        }
+        return false
+    }
+
+    fun setInvoicePaid(cardId: Long, year: Int, month: Int, isPaid: Boolean) {
+        val key = "${cardId}_${year}_${month}"
+        val paidSet = _paidInvoices.value.toMutableSet()
+        val unpaidSet = _unpaidInvoices.value.toMutableSet()
+        if (isPaid) {
+            paidSet.add(key)
+            unpaidSet.remove(key)
+        } else {
+            paidSet.remove(key)
+            unpaidSet.add(key)
+        }
+        prefs.edit()
+            .putStringSet(KEY_PAID_INVOICES, paidSet)
+            .putStringSet(KEY_UNPAID_INVOICES, unpaidSet)
+            .apply()
+        _paidInvoices.value = paidSet
+        _unpaidInvoices.value = unpaidSet
+    }
+
+    fun toggleInvoicePaid(cardId: Long, year: Int, month: Int) {
+        val currentlyPaid = isInvoicePaid(cardId, year, month)
+        setInvoicePaid(cardId, year, month, !currentlyPaid)
+    }
+
     companion object {
+        private const val KEY_PAID_INVOICES = "key_paid_invoices_set"
+        private const val KEY_UNPAID_INVOICES = "key_unpaid_invoices_set"
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_THEME_COLOR = "key_theme_color"
         private const val KEY_CUSTOM_THEME_COLOR_HEX = "key_custom_theme_color_hex"

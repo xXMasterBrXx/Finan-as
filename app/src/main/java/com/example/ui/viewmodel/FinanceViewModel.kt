@@ -764,35 +764,75 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AdvancedAnalytics())
 
-    // Aggregated cards with their monthly invoice expenses
+    // Aggregated cards with their monthly invoice expenses, current open invoice, and real-time used limit
     val cardsWithExpenses: StateFlow<List<CardWithExpenses>> = combine(
         creditCards,
         allTransactions,
-        _currentPeriod
-    ) { cards, transactions, period ->
+        _currentPeriod,
+        userPreferences.paidInvoices,
+        userPreferences.unpaidInvoices
+    ) { cards, transactions, period, _, _ ->
+        val now = System.currentTimeMillis()
         cards.map { card ->
-            // Transactions whose invoice is due in the current period (month/year)
-            val cardTxList = transactions.filter {
+            // All active expense transactions for this card
+            val allCardExpenses = transactions.filter {
                 !it.isDeleted &&
                 it.cardId == card.id &&
-                it.type == TransactionType.EXPENSE.name &&
+                it.type == TransactionType.EXPENSE.name
+            }
+
+            // 1. Fatura do mês/período selecionado
+            val periodTxList = allCardExpenses.filter {
                 CreditCardBillingHelper.isPaymentDueInPeriod(it.timestamp, card, period.year, period.month)
             }
-            val totalExpense = cardTxList.sumOf { it.amount }
+            val totalExpense = periodTxList.sumOf { it.amount }
+            val isInvoicePaidThisMonth = userPreferences.isInvoicePaid(card.id, period.year, period.month)
+
+            // 2. Visão da Fatura Atual (Aberta hoje)
+            val currentOpenInvoiceDates = CreditCardBillingHelper.getCurrentOpenInvoiceDates(card, now)
+            val isCurrentOpenInvoicePaid = userPreferences.isInvoicePaid(card.id, currentOpenInvoiceDates.dueYear, currentOpenInvoiceDates.dueMonth)
+            val currentOpenInvoiceTx = allCardExpenses.filter { tx ->
+                val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(tx.timestamp, card)
+                dueYear == currentOpenInvoiceDates.dueYear && dueMonth == currentOpenInvoiceDates.dueMonth
+            }
+            val currentOpenInvoiceExpense = if (isCurrentOpenInvoicePaid) 0.0 else currentOpenInvoiceTx.sumOf { it.amount }
+
+            // 3. Limite Utilizado Atual: Considera a data atual e todas as faturas/despesas em aberto (NÃO pagas)
+            // Se uma fatura foi marcada como paga, as despesas dela não consomem mais o limite do cartão!
+            val currentUsedLimit = allCardExpenses.filter { tx ->
+                val (dueYear, dueMonth) = CreditCardBillingHelper.calculatePaymentMonthAndYear(tx.timestamp, card)
+                !userPreferences.isInvoicePaid(card.id, dueYear, dueMonth)
+            }.sumOf { it.amount }
+
             val progress = if (card.limitAmount > 0) {
-                (totalExpense / card.limitAmount).toFloat().coerceIn(0f, 1f)
+                (currentUsedLimit / card.limitAmount).toFloat().coerceIn(0f, 1f)
             } else 0f
-            val remaining = (card.limitAmount - totalExpense).coerceAtLeast(0.0)
+            val remaining = (card.limitAmount - currentUsedLimit).coerceAtLeast(0.0)
 
             CardWithExpenses(
                 card = card,
                 totalExpenseThisMonth = totalExpense,
-                monthlyTransactions = cardTxList,
+                monthlyTransactions = periodTxList,
                 limitProgress = progress,
-                remainingLimit = remaining
+                remainingLimit = remaining,
+                isInvoicePaidThisMonth = isInvoicePaidThisMonth,
+                isCurrentOpenInvoicePaid = isCurrentOpenInvoicePaid,
+                currentOpenInvoiceExpense = currentOpenInvoiceExpense,
+                currentOpenInvoiceTransactionsCount = currentOpenInvoiceTx.size,
+                currentInvoiceClosingDateText = currentOpenInvoiceDates.closingFormatted,
+                currentInvoiceDueDateText = currentOpenInvoiceDates.dueFormatted,
+                currentUsedLimit = currentUsedLimit
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun toggleInvoicePaid(cardId: Long, year: Int, month: Int) {
+        userPreferences.toggleInvoicePaid(cardId, year, month)
+    }
+
+    fun isInvoicePaid(cardId: Long, year: Int, month: Int): Boolean {
+        return userPreferences.isInvoicePaid(cardId, year, month)
+    }
 
     // Month Navigation
     fun previousMonth() {

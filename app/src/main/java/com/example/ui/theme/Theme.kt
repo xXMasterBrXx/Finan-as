@@ -13,6 +13,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.preferences.AppThemeMode
 import com.example.data.preferences.AppThemeColor
@@ -133,21 +134,26 @@ fun MyApplicationTheme(
             containerVal = Color(android.graphics.Color.HSVToColor(contHsv))
             onContainerVal = Color.White
         } else {
-            val lightHsv = floatArrayOf(
+            // Preserva exatamente a cor configurada pelo usuário (idêntica à preview do seletor)
+            primaryVal = Color(baseLong)
+            // Container sutil e elegante com o mesmo tom
+            val contHsv = floatArrayOf(
                 hsv[0],
-                hsv[1].coerceAtLeast(0.65f),
-                (hsv[2] * 0.9f).coerceIn(0.35f, 0.75f)
+                (hsv[1] * 0.25f).coerceIn(0.06f, 0.22f),
+                0.97f
             )
-            primaryVal = Color(android.graphics.Color.HSVToColor(lightHsv))
-            val contHsv = floatArrayOf(hsv[0], 0.16f, 0.96f)
             containerVal = Color(android.graphics.Color.HSVToColor(contHsv))
-            onContainerVal = primaryVal
+            onContainerVal = if (primaryVal.luminance() > 0.55f) Color(0xFF1E1E1E) else primaryVal
         }
     } else {
         primaryVal = Color(if (isDark) themeColor.primaryDarkHex else themeColor.primaryLightHex)
         containerVal = Color(if (isDark) themeColor.containerDarkHex else themeColor.containerLightHex)
         onContainerVal = if (isDark) Color.White else Color(themeColor.primaryLightHex)
     }
+
+    // Garante contraste impecável: se a cor for clara (amarelos claros, rosa claro, verde claro), usa texto escuro
+    val isPrimaryLight = primaryVal.luminance() > 0.55f
+    val onPrimaryVal = if (isPrimaryLight) Color(0xFF121212) else Color.White
 
     val baseColorScheme: ColorScheme = when (themeMode) {
         AppThemeMode.SYSTEM -> if (systemDark) DarkColorScheme else WarmLightColorScheme
@@ -159,11 +165,11 @@ fun MyApplicationTheme(
 
     val colorScheme = baseColorScheme.copy(
         primary = primaryVal,
-        onPrimary = Color.White,
+        onPrimary = onPrimaryVal,
         primaryContainer = containerVal,
         onPrimaryContainer = onContainerVal,
         secondary = primaryVal,
-        onSecondary = Color.White,
+        onSecondary = onPrimaryVal,
         secondaryContainer = containerVal,
         onSecondaryContainer = onContainerVal,
         tertiary = primaryVal,

@@ -85,4 +85,47 @@ object CreditCardBillingHelper {
         val (dueYear, dueMonth) = calculatePaymentMonthAndYear(purchaseTimestamp, card)
         return dueYear == targetYear && dueMonth == targetMonth
     }
+
+    data class InvoiceDateDetails(
+        val dueYear: Int,
+        val dueMonth: Int, // 0-based
+        val closingDay: Int,
+        val dueDay: Int,
+        val closingFormatted: String, // ex: "13/10"
+        val dueFormatted: String       // ex: "20/10"
+    )
+
+    fun getInvoiceDates(card: CreditCardEntity, dueYear: Int, dueMonth: Int): InvoiceDateDetails {
+        val closingDay = card.closingDay.coerceIn(1, 31)
+        val dueDay = card.dueDay.coerceIn(1, 31)
+
+        val closingFormatted: String
+        if (closingDay <= dueDay) {
+            closingFormatted = String.format("%02d/%02d", closingDay, dueMonth + 1)
+        } else {
+            val closeCal = Calendar.getInstance().apply {
+                set(Calendar.YEAR, dueYear)
+                set(Calendar.MONTH, dueMonth)
+                set(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.MONTH, -1)
+            }
+            closingFormatted = String.format("%02d/%02d", closingDay, closeCal.get(Calendar.MONTH) + 1)
+        }
+
+        val dueFormatted = String.format("%02d/%02d", dueDay, dueMonth + 1)
+
+        return InvoiceDateDetails(
+            dueYear = dueYear,
+            dueMonth = dueMonth,
+            closingDay = closingDay,
+            dueDay = dueDay,
+            closingFormatted = closingFormatted,
+            dueFormatted = dueFormatted
+        )
+    }
+
+    fun getCurrentOpenInvoiceDates(card: CreditCardEntity, now: Long = System.currentTimeMillis()): InvoiceDateDetails {
+        val (dueYear, dueMonth) = calculatePaymentMonthAndYear(now, card)
+        return getInvoiceDates(card, dueYear, dueMonth)
+    }
 }
