@@ -273,7 +273,7 @@ fun FinanceApp(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "FinanFlow",
+                                text = "BUMoney",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 0.2.sp

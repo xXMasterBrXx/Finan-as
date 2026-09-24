@@ -221,7 +221,7 @@ object NotificationManagerHelper {
      * Sends an instant test notification.
      */
     fun sendTestNotification(context: Context) {
-        val title = "🔔 FinanFlow: Notificação de Teste"
+        val title = "🔔 BUMoney: Notificação de Teste"
         val message = "Tudo pronto! Seu sistema de alertas para contas, faturas de cartão e orçamentos está funcionando perfeitamente."
 
         CoroutineScope(Dispatchers.IO).launch {

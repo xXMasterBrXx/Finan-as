@@ -168,7 +168,7 @@ class LocalBackupManager(
             val jsonString = try {
                 decryptPayload(encryptedBytes)
             } catch (e: Exception) {
-                return@withContext Result.failure(Exception("Arquivo de backup inválido ou não compatível com o FinanFlow"))
+                return@withContext Result.failure(Exception("Arquivo de backup inválido ou não compatível com o BUMoney"))
             }
 
             val root = JSONObject(jsonString)

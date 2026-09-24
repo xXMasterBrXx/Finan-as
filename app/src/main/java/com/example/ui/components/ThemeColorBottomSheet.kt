@@ -105,7 +105,7 @@ fun ThemeColorBottomSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Personalize o visual do FinanFlow",
+                            text = "Personalize o visual do BUMoney",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -132,7 +132,7 @@ class GitHubUpdateManager {
                 val baseDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
                     ?: context.externalCacheDir
                     ?: context.cacheDir
-                val apkFile = File(baseDir, "FinanFlow_Update.apk")
+                val apkFile = File(baseDir, "BUMoney_Update.apk")
                 if (apkFile.exists()) {
                     apkFile.delete()
                 }
@@ -175,7 +175,7 @@ class GitHubUpdateManager {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(settingsIntent)
-                    return Result.failure(Exception("Autorize a instalação de fontes desconhecidas para o FinanFlow nas configurações do Android e tente novamente."))
+                    return Result.failure(Exception("Autorize a instalação de fontes desconhecidas para o BUMoney nas configurações do Android e tente novamente."))
                 }
             }
 

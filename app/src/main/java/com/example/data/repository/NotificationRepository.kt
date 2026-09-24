@@ -248,7 +248,7 @@ class NotificationRepository(
 
             if (!alreadyNotified) {
                 val notif = NotificationItemEntity(
-                    title = "✍️ FinanFlow: Lembrete Diário",
+                    title = "✍️ BUMoney: Lembrete Diário",
                     message = "Não se esqueça de registrar seus gastos e ganhos de hoje para manter seu controle financeiro impecável!",
                     type = "SYSTEM_REMINDER",
                     timestamp = System.currentTimeMillis(),

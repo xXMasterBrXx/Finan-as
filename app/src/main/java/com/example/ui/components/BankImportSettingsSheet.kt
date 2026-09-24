@@ -172,9 +172,9 @@ fun BankImportSettingsSheet(
 
                     Text(
                         text = if (isPermissionGranted)
-                            "O FinanFlow possui permissão do sistema Android para ouvir as notificações emitidas pelos aplicativos dos seus bancos."
+                            "O BUMoney possui permissão do sistema Android para ouvir as notificações emitidas pelos aplicativos dos seus bancos."
                         else
-                            "Para importar transações automaticamente do Nubank, Itaú, Bradesco, Inter e outros, ative a opção 'FinanFlow - Leitor' nas configurações do Android.",
+                            "Para importar transações automaticamente do Nubank, Itaú, Bradesco, Inter e outros, ative a opção 'BUMoney - Leitor' nas configurações do Android.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

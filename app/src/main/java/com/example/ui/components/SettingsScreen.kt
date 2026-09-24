@@ -650,7 +650,7 @@ fun SettingsScreen(
             SettingsGroup(title = "SOBRE") {
                 SettingsGroupRow(
                     icon = Icons.Default.Info,
-                    title = "Versão do FinanFlow",
+                    title = "Versão do BUMoney",
                     subtitle = "Controle Financeiro Offline-first Room",
                     valueText = displayVersion,
                     onClick = {},
@@ -1129,7 +1129,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Defina com que frequência o FinanFlow deve gerar cópias de segurança criptografadas:",
+                    text = "Defina com que frequência o BUMoney deve gerar cópias de segurança criptografadas:",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1856,7 +1856,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "O FinanFlow verifica atualizações via GitHub Releases oficial.",
+                    text = "O BUMoney verifica atualizações via GitHub Releases oficial.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
