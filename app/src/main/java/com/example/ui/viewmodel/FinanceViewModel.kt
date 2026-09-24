@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -296,6 +297,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Categories.incomeCategories)
 
         viewModelScope.launch {
+            checkAndRecoverAfterUpdate()
             repository.seedInitialDataIfEmpty()
             cardRepository.seedInitialCardsIfEmpty()
 
@@ -1224,6 +1226,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun downloadAndInstallApk(context: android.content.Context, downloadUrl: String) {
         viewModelScope.launch {
+            // STEP 1: Pre-update snapshot to guarantee zero data loss
+            try {
+                backupManager.createPreUpdateSnapshot()
+                refreshBackupList()
+            } catch (e: Exception) {
+                android.util.Log.w("FinanceViewModel", "Pre-update safety snapshot warning: ${e.message}")
+            }
+
             _isDownloading.value = true
             _downloadProgress.value = 0
             val result = updateManager.downloadAndInstallApk(context, downloadUrl) { progress ->
@@ -1233,6 +1243,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _downloadProgress.value = null
             
             result.onSuccess { apkFile ->
+                userPreferences.setLastInstalledVersionName(getInstalledVersionName())
                 val installResult = updateManager.triggerInstall(context, apkFile)
                 installResult.onFailure { error ->
                     _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error(
@@ -1243,6 +1254,38 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 _updateCheckStatus.value = com.example.util.UpdateCheckResult.Error("Falha ao baixar o arquivo: ${error.localizedMessage}")
             }
         }
+    }
+
+    private suspend fun checkAndRecoverAfterUpdate() {
+        val currentVersion = getInstalledVersionName()
+        val lastVersion = userPreferences.getLastInstalledVersionName()
+        val hasSeeded = userPreferences.isInitialDataSeeded()
+
+        if (lastVersion.isNotEmpty() && lastVersion != currentVersion) {
+            android.util.Log.i("FinanceViewModel", "App was updated from $lastVersion to $currentVersion. Verifying database integrity...")
+            val txList = repository.allTransactions.firstOrNull() ?: emptyList()
+            val cardList = cardRepository.allCards.firstOrNull() ?: emptyList()
+
+            // If an update wiped the database, automatically restore from the safety backup
+            if (txList.isEmpty() && cardList.isEmpty() && hasSeeded) {
+                android.util.Log.w("FinanceViewModel", "Database was empty post-update. Auto-restoring from safety backup...")
+                val safetyBackup = backupManager.getMostRecentSafetyBackup()
+                if (safetyBackup != null) {
+                    val restoreResult = backupManager.restoreBackup(safetyBackup)
+                    if (restoreResult.isSuccess) {
+                        refreshBackupList()
+                        _backupStatusMessage.value = "Atualização concluída! Seus dados foram preservados e restaurados automaticamente."
+                        android.util.Log.i("FinanceViewModel", "Auto-restored data successfully from ${safetyBackup.name}")
+                    } else {
+                        android.util.Log.e("FinanceViewModel", "Failed to auto-restore safety backup: ${restoreResult.exceptionOrNull()?.message}")
+                    }
+                }
+            } else {
+                android.util.Log.i("FinanceViewModel", "Data integrity confirmed (${txList.size} transactions, ${cardList.size} cards).")
+            }
+        }
+
+        userPreferences.setLastInstalledVersionName(currentVersion)
     }
 
     fun clearUpdateStatus() {

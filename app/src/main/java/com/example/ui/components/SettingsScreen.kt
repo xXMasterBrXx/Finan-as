@@ -207,7 +207,6 @@ fun SettingsScreen(
     var showThemeSheet by remember { mutableStateOf(false) }
     var showColorSheet by remember { mutableStateOf(false) }
     var showCustomColorPicker by remember { mutableStateOf(false) }
-    var selectedColorTab by remember { mutableStateOf(0) }
     var showIntervalDialog by remember { mutableStateOf(false) }
     var showCategoriesSheet by remember { mutableStateOf(false) }
     var showBackupsSheet by remember { mutableStateOf(false) }
@@ -419,7 +418,7 @@ fun SettingsScreen(
                 SettingsGroupRow(
                     icon = Icons.Default.Palette,
                     title = "Cor de Destaque",
-                    subtitle = "Degradês, cores metálicas e paleta personalizada",
+                    subtitle = "Cores clássicas e paleta personalizada",
                     valueText = if (themeColor == AppThemeColor.CUSTOM) "Personalizada (${String.format("#%06X", 0xFFFFFF and customColorHex.toInt())})" else themeColor.displayName,
                     leadingBadge = {
                         if (themeColor == AppThemeColor.CUSTOM) {
@@ -428,18 +427,6 @@ fun SettingsScreen(
                                     .size(16.dp)
                                     .clip(CircleShape)
                                     .background(Color(customColorHex or 0xFF000000L))
-                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
-                            )
-                        } else if (themeColor.isGradient && themeColor.gradientColors.isNotEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            themeColor.gradientColors.map { Color(it or 0xFF000000L) }
-                                        )
-                                    )
                                     .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
                             )
                         } else {
@@ -1026,65 +1013,21 @@ fun SettingsScreen(
                     }
                 }
 
-                // Tab Selector: Degradês & Especiais vs Cores Clássicas
-                TabRow(
-                    selectedTabIndex = selectedColorTab,
-                    containerColor = Color.Transparent,
-                    divider = {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    }
-                ) {
-                    Tab(
-                        selected = selectedColorTab == 0,
-                        onClick = { selectedColorTab = 0 },
-                        text = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Degradês & Especiais",
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = if (selectedColorTab == 0) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                )
-                            }
-                        }
-                    )
-                    Tab(
-                        selected = selectedColorTab == 1,
-                        onClick = { selectedColorTab = 1 },
-                        text = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ColorLens,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Cores Clássicas",
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = if (selectedColorTab == 1) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                )
-                            }
-                        }
-                    )
-                }
+                Text(
+                    text = "Cores Clássicas",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                val colorsToShow = if (selectedColorTab == 0) {
-                    AppThemeColor.values().filter { it.isGradient }
-                } else {
-                    AppThemeColor.values().filter { !it.isGradient && it != AppThemeColor.CUSTOM }
-                }
+                val colorsToShow = listOf(
+                    AppThemeColor.EMERALD,
+                    AppThemeColor.BLUE,
+                    AppThemeColor.PURPLE,
+                    AppThemeColor.MINT,
+                    AppThemeColor.ORANGE,
+                    AppThemeColor.RED,
+                    AppThemeColor.PINK
+                )
 
                 Row(
                     modifier = Modifier
@@ -1109,17 +1052,7 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(54.dp)
                                     .clip(CircleShape)
-                                    .then(
-                                        if (col.isGradient && col.gradientColors.isNotEmpty()) {
-                                            Modifier.background(
-                                                Brush.linearGradient(
-                                                    col.gradientColors.map { Color(it or 0xFF000000L) }
-                                                )
-                                            )
-                                        } else {
-                                            Modifier.background(Color(colorHex))
-                                        }
-                                    )
+                                    .background(Color(colorHex))
                                     .border(
                                         width = if (isColorSelected) 3.dp else 1.5.dp,
                                         color = if (isColorSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),

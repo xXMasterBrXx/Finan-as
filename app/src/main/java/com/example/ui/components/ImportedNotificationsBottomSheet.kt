@@ -191,15 +191,6 @@ fun ImportedNotificationsBottomSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 24.dp)
                             )
-                            OutlinedButton(
-                                onClick = onSimulateNotification,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.padding(top = 8.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.AddAlert, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Simular Notificação de Exemplo")
-                            }
                         }
                     }
                 } else {

@@ -243,6 +243,39 @@ class LocalBackupManager(
         return backupDir.listFiles { file -> file.extension == "finbackup" }?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
 
+    suspend fun createPreUpdateSnapshot(): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val bytesResult = createBackupBytes()
+            if (bytesResult.isFailure) {
+                return@withContext Result.failure(bytesResult.exceptionOrNull() ?: Exception("Erro ao gerar backup de segurança"))
+            }
+            val encrypted = bytesResult.getOrThrow()
+            
+            // 1. Save dedicated pre-update safety file in filesDir
+            val safetyFile = File(context.filesDir, "pre_update_safety_backup.finbackup")
+            safetyFile.writeBytes(encrypted)
+
+            // 2. Also save into standard backups folder
+            val timeStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val archiveFile = File(backupDir, "finanflow_backup_pre_update_$timeStr.finbackup")
+            archiveFile.writeBytes(encrypted)
+
+            userPreferences.setLastBackupTimestamp(System.currentTimeMillis())
+            Result.success(safetyFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getMostRecentSafetyBackup(): File? {
+        val safetyFile = File(context.filesDir, "pre_update_safety_backup.finbackup")
+        if (safetyFile.exists() && safetyFile.length() > 0L) {
+            return safetyFile
+        }
+        val backups = listBackups()
+        return backups.firstOrNull { it.length() > 0L }
+    }
+
     fun deleteBackup(file: File): Boolean {
         return file.delete()
     }

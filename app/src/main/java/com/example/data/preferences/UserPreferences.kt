@@ -231,7 +231,8 @@ class UserPreferences(context: Context) {
 
     private val _themeColor = MutableStateFlow(
         try {
-            AppThemeColor.valueOf(prefs.getString(KEY_THEME_COLOR, AppThemeColor.EMERALD.name) ?: AppThemeColor.EMERALD.name)
+            val saved = AppThemeColor.valueOf(prefs.getString(KEY_THEME_COLOR, AppThemeColor.EMERALD.name) ?: AppThemeColor.EMERALD.name)
+            if (saved.isGradient) AppThemeColor.EMERALD else saved
         } catch (e: Exception) {
             AppThemeColor.EMERALD
         }
@@ -570,6 +571,16 @@ class UserPreferences(context: Context) {
         prefs.edit().putString(KEY_AUTO_IMPORT_DISABLED_BANKS, current.joinToString(",")).apply()
     }
 
+    fun getLastInstalledVersionName(): String = prefs.getString(KEY_LAST_INSTALLED_VERSION_NAME, "") ?: ""
+    fun setLastInstalledVersionName(versionName: String) {
+        prefs.edit().putString(KEY_LAST_INSTALLED_VERSION_NAME, versionName).apply()
+    }
+
+    fun getLastInstalledVersionCode(): Int = prefs.getInt(KEY_LAST_INSTALLED_VERSION_CODE, 0)
+    fun setLastInstalledVersionCode(versionCode: Int) {
+        prefs.edit().putInt(KEY_LAST_INSTALLED_VERSION_CODE, versionCode).apply()
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_THEME_COLOR = "key_theme_color"
@@ -600,6 +611,8 @@ class UserPreferences(context: Context) {
         private const val KEY_AUTO_IMPORT_IGNORE_DUPLICATES = "key_auto_import_ignore_duplicates"
         private const val KEY_AUTO_IMPORT_NOTIFY_ON_IMPORT = "key_auto_import_notify_on_import"
         private const val KEY_AUTO_IMPORT_DISABLED_BANKS = "key_auto_import_disabled_banks"
+        private const val KEY_LAST_INSTALLED_VERSION_NAME = "key_last_installed_version_name"
+        private const val KEY_LAST_INSTALLED_VERSION_CODE = "key_last_installed_version_code"
 
         @Volatile
         private var instance: UserPreferences? = null

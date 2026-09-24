@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.CreditCardEntity
@@ -94,7 +95,15 @@ fun TransactionList(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .testTag("search_transactions_input"),
-            placeholder = { Text("Buscar por descrição ou categoria...") },
+            placeholder = {
+                Text(
+                    text = "Buscar por descrição ou categoria...",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Search,

@@ -16,6 +16,9 @@ interface ImportedNotificationDao {
     @Query("SELECT * FROM imported_bank_notifications WHERE status = 'PENDING' ORDER BY timestamp DESC")
     fun getPendingNotifications(): Flow<List<ImportedNotificationEntity>>
 
+    @Query("SELECT * FROM imported_bank_notifications WHERE status = 'PENDING' ORDER BY timestamp DESC")
+    suspend fun getPendingNotificationsSync(): List<ImportedNotificationEntity>
+
     @Query("SELECT COUNT(*) FROM imported_bank_notifications WHERE status = 'PENDING'")
     fun getPendingCount(): Flow<Int>
 
@@ -24,6 +27,12 @@ interface ImportedNotificationDao {
 
     @Query("SELECT * FROM imported_bank_notifications WHERE amount = :amount AND merchant = :merchant AND timestamp >= :minTimestamp LIMIT 1")
     suspend fun findRecentDuplicate(amount: Double, merchant: String, minTimestamp: Long): ImportedNotificationEntity?
+
+    @Query("SELECT * FROM imported_bank_notifications WHERE timestamp >= :minTimestamp ORDER BY timestamp DESC")
+    suspend fun getRecentNotifications(minTimestamp: Long): List<ImportedNotificationEntity>
+
+    @Query("SELECT * FROM imported_bank_notifications WHERE amount = :amount AND timestamp >= :minTimestamp ORDER BY timestamp DESC")
+    suspend fun getRecentByAmount(amount: Double, minTimestamp: Long): List<ImportedNotificationEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: ImportedNotificationEntity): Long

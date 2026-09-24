@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TransactionEntity::class, CreditCardEntity::class, CustomCategoryEntity::class, NotificationItemEntity::class, ImportedNotificationEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "finanflow_database"
-                ).fallbackToDestructiveMigration().build()
+                )
+                .addMigrations(*DatabaseMigrations.getAllMigrations())
+                .fallbackToDestructiveMigrationOnDowngrade()
+                .build()
                 INSTANCE = instance
                 instance
             }

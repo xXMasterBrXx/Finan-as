@@ -272,31 +272,18 @@ fun FinanceApp(
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column(
+                            Text(
+                                text = "FinanFlow",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.2.sp
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.clickable {
                                     selectedTab = 4
                                 }
-                            ) {
-                                Text(
-                                    text = "FinanFlow",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 0.2.sp
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "Tracker Financeiro",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            )
                         }
                     }
                 },

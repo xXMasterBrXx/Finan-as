@@ -2,7 +2,6 @@ package com.example.util
 
 import java.text.Normalizer
 import java.util.Locale
-import java.util.regex.Pattern
 
 data class ParsedBankNotification(
     val packageName: String,
@@ -19,7 +18,7 @@ data class ParsedBankNotification(
 
 object BankNotificationParser {
 
-    private val BANK_PACKAGE_MAP = mapOf(
+    val BANK_PACKAGE_MAP = mapOf(
         "com.nu.production" to "Nubank",
         "com.nu.pay" to "Nubank",
         "com.itau" to "Itaú",
@@ -47,21 +46,181 @@ object BankNotificationParser {
         "com.nomad.app" to "Nomad",
         "com.transferwise.android" to "Wise",
         "com.willbank.app" to "Will Bank",
-        "br.com.neon" to "Neon"
+        "br.com.neon" to "Neon",
+        "com.google.android.apps.walletnfcrel" to "Google Carteira",
+        "com.google.android.gms" to "Google Pay",
+        "com.samsung.android.spay" to "Samsung Wallet"
     )
 
-    private val FINANCE_KEYWORDS = listOf(
-        "compra", "aprovada", "pix", "transferencia", "transferência", "pagamento",
-        "debito", "débito", "credito", "crédito", "cartao", "cartão", "recebeu",
-        "recebido", "enviado", "enviou", "saque", "fatura", "gasto", "cobranca",
-        "cobrança", "cashback", "estorno", "reembolso", "deposito", "depósito",
-        "r$", "brl", "usd", "$"
+    // Known non-financial packages (retail, e-commerce, delivery, social) that should NEVER be parsed as banks
+    val BLOCKED_PACKAGES = setOf(
+        // E-commerce & Marketplaces
+        "com.shopee.br",
+        "com.mercadolibre",
+        "com.mercadolibre.android",
+        "com.mercadolivre",
+        "com.mercadolivre.android",
+        "com.alibaba.aliexpresshd",
+        "com.aliexpress",
+        "com.amazon.mShop.android.shopping",
+        "br.com.magazineluiza",
+        "com.luizalabs.magazineluiza",
+        "com.shein.fashion",
+        "com.b2w.americanas",
+        "br.com.casasbahia",
+        "br.com.pontofrio",
+        "br.com.extra",
+        "com.enjoei.app",
+        "com.olx.southamerica",
+        "com.kabum",
+        "com.dafitigroup",
+        "br.com.netshoes.app",
+        "com.centauro",
+        "com.contextlogic.wish",
+
+        // Food & Delivery Promo Notifications
+        "com.ifood",
+        "delivery.ifood.com",
+        "com.ifood.customer",
+        "com.ubercab.eats",
+        "com.rappi",
+        "com.zedelivery.pedidos",
+        "com.aiqfome",
+
+        // Social, Messaging, Media & Browsers
+        "com.whatsapp",
+        "com.whatsapp.w4b",
+        "org.telegram.messenger",
+        "com.instagram.android",
+        "com.facebook.katana",
+        "com.facebook.orca",
+        "com.zhiliaoapp.musically",
+        "com.twitter.android",
+        "com.discord",
+        "com.netflix.mediaclient",
+        "com.spotify.music",
+        "com.google.android.youtube",
+        "com.android.chrome"
     )
+
+    // Keywords that indicate a promotional/marketing notification rather than a confirmed financial transaction
+    private val PROMO_KEYWORDS = listOf(
+        "cupom", "cupons", "oferta", "ofertas", "desconto", "descontos",
+        "promocao", "promoção", "promocoes", "promoções", "aproveite",
+        "compre agora", "compre e ganhe", "economize", "frete gratis",
+        "frete grátis", "sem frete", "imperdivel", "imperdível",
+        "só hoje", "so hoje", "tempo limitado", "ultimas horas",
+        "últimas horas", "a partir de", "parcelas a partir", "sem juros",
+        "novidade", "confira", "veja as ofertas", "clique aqui",
+        "toque para ver", "não perca", "nao perca", "sorteio",
+        "concorra", "prêmio", "premio", "limite pré-aprovado",
+        "limite pre-aprovado", "empréstimo pré-aprovado", "emprestimo pre-aprovado",
+        "peça já", "peca ja", "solicite já", "solicite ja", "leia mais",
+        "faça seu pedido", "faca seu pedido", "carrinho", "esqueceu algo",
+        "itens no carrinho", "avalie sua compra", "como foi sua entrega",
+        "o que achou", "ganhe até", "ganhe ate", "resgate seu", "apenas r$",
+        "por apenas", "use o código", "use o codigo"
+    )
+
+    // Patterns indicating a legitimate confirmed money movement (purchase, payment, pix, transfer)
+    private val TRANSACTION_ACTION_PATTERNS = listOf(
+        // Purchases & Cards
+        Regex("""(?:compra\s+aprovada|compra\s+confirmada|compra\s+realizada)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:compra\s+no\s+(?:cr[eé]dito|d[eé]bito|cart[aã]o))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:compra\s+(?:no|na|em)\s+.*?\s+(?:no\s+valor|de\s+R\$|R\$))""", RegexOption.IGNORE_CASE),
+
+        // Payments & Wallets
+        Regex("""(?:voc[eê]\s+pagou|pagou\s+R\$|pagamento\s+(?:aprovado|realizado|efetuado|confirmado))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:pagamento\s+com\s+(?:google\s+pay|carteira|aproxima[cç][aã]o))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:pagamento\s+de\s+(?:boleto|conta|fatura))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:d[eé]bito\s+(?:aprovado|realizado|autorizado))""", RegexOption.IGNORE_CASE),
+
+        // Pix & Transfers
+        Regex("""(?:pix\s+(?:enviado|recebido|agendado|realizado|pago))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:voc[eê]\s+recebeu\s+um\s+pix|recebeu\s+um\s+pix|transfer[eê]ncia\s+(?:recebida|enviada|realizada))""", RegexOption.IGNORE_CASE),
+        Regex("""(?:ted\s+(?:recebida|enviada)|doc\s+(?:recebido|enviado))""", RegexOption.IGNORE_CASE),
+
+        // Income / Receipts
+        Regex("""(?:dep[oó]sito\s+recebido|sal[aá]rio\s+creditado|valor\s+creditado|cashback\s+creditado|reembolso\s+recebido|estorno\s+(?:realizado|aprovado))""", RegexOption.IGNORE_CASE),
+
+        // Google Wallet / Google Pay specific triggers
+        Regex("""(?:Google\s+Pay|Carteira\s+do\s+Google|Google\s+Wallet)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:cart[aã]o\s+final\s*\d{4}\s*•)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:•{3,4}\s*\d{4})""", RegexOption.IGNORE_CASE)
+    )
+
+    fun isWalletPackage(packageName: String): Boolean {
+        val lower = packageName.lowercase(Locale.getDefault())
+        return lower == "com.google.android.apps.walletnfcrel" ||
+                lower == "com.google.android.gms" ||
+                lower == "com.samsung.android.spay"
+    }
 
     fun isBankNotification(packageName: String, title: String, text: String): Boolean {
-        if (BANK_PACKAGE_MAP.containsKey(packageName)) return true
-        val combined = "$title $text".lowercase(Locale.getDefault())
-        return FINANCE_KEYWORDS.any { combined.contains(it) }
+        val pkg = packageName.lowercase(Locale.getDefault())
+
+        // 1. Block known non-banking / retail / shopping / delivery apps
+        if (BLOCKED_PACKAGES.contains(pkg)) {
+            return false
+        }
+        if (pkg.contains("shopee") || pkg.contains("mercadolibre") || pkg.contains("mercadolivre") ||
+            pkg.contains("aliexpress") || pkg.contains("shein") || pkg.contains("magazineluiza") ||
+            pkg.contains("americanas") || pkg.contains("casasbahia") || pkg.contains("ifood") ||
+            pkg.contains("rappi") || pkg.contains("enjoei") || pkg.contains("olx") ||
+            pkg.contains("kabum") || pkg.contains("dafitigroup") || pkg.contains("netshoes")
+        ) {
+            return false
+        }
+
+        val fullContent = "$title $text".lowercase(Locale.getDefault())
+        val normalized = removeAccents(fullContent)
+
+        // 2. Reject promotional / marketing keywords
+        if (PROMO_KEYWORDS.any { normalized.contains(removeAccents(it)) }) {
+            return false
+        }
+
+        // 3. For Google Play Services, ONLY accept if it's explicitly Google Pay / Wallet
+        if (pkg == "com.google.android.gms") {
+            val isGooglePay = fullContent.contains("google pay") ||
+                    fullContent.contains("carteira") ||
+                    fullContent.contains("você pagou") ||
+                    fullContent.contains("voce pagou") ||
+                    fullContent.contains("aproximação") ||
+                    fullContent.contains("aproximacao")
+            if (!isGooglePay) return false
+        }
+
+        // 4. Must match a legitimate financial transaction action pattern
+        val matchesAction = TRANSACTION_ACTION_PATTERNS.any { it.containsMatchIn(fullContent) }
+        if (!matchesAction) {
+            return false
+        }
+
+        // 5. Must contain a valid money amount
+        val amount = extractAmount(fullContent)
+        if (amount == null || amount <= 0.0) {
+            return false
+        }
+
+        // 6. Must be in known financial package map or have strong banking signal
+        if (BANK_PACKAGE_MAP.containsKey(pkg)) {
+            return true
+        }
+
+        return hasStrongBankingConfirmation(fullContent)
+    }
+
+    private fun hasStrongBankingConfirmation(text: String): Boolean {
+        val normalized = removeAccents(text.lowercase(Locale.getDefault()))
+        val strongSignals = listOf(
+            "compra aprovada", "compra realizada", "compra confirmada",
+            "pix enviado", "pix recebido", "recebeu um pix",
+            "pagamento realizado", "pagamento aprovado", "pagamento efetuado",
+            "debito aprovado", "debito realizado", "transferencia recebida",
+            "transferencia enviada", "ted recebida", "saque realizado"
+        )
+        return strongSignals.any { normalized.contains(it) }
     }
 
     fun parse(packageName: String, title: String, text: String, subtext: String? = null): ParsedBankNotification? {
@@ -112,6 +271,8 @@ object BankNotificationParser {
             combined.contains("wise") -> "Wise"
             combined.contains("will") || combined.contains("will bank") -> "Will Bank"
             combined.contains("neon") -> "Neon"
+            combined.contains("carteira") || combined.contains("google pay") -> "Google Carteira"
+            combined.contains("samsung pay") || combined.contains("samsung wallet") -> "Samsung Wallet"
             else -> "Notificação Bancária"
         }
     }
@@ -141,15 +302,12 @@ object BankNotificationParser {
         try {
             var s = raw.trim()
             if (s.contains(",") && s.contains(".")) {
-                // e.g. 1.250,50 -> remove dot, replace comma with dot
                 if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
                     s = s.replace(".", "").replace(",", ".")
                 } else {
-                    // e.g. 1,250.50 -> remove comma
                     s = s.replace(",", "")
                 }
             } else if (s.contains(",")) {
-                // e.g. 150,00 -> replace comma with dot
                 s = s.replace(",", ".")
             }
             val parsed = s.toDoubleOrNull()
@@ -161,9 +319,18 @@ object BankNotificationParser {
 
     private fun extractType(text: String): String {
         val normalized = removeAccents(text.lowercase(Locale.getDefault()))
+
+        // Explicit Expense keywords always take precedence (e.g. "compra no crédito", "pagamento com cartão de crédito")
+        val expenseKeywords = listOf(
+            "compra", "pagou", "pagamento", "gasto", "debito", "fatura", "saque", "tarifa"
+        )
+        if (expenseKeywords.any { normalized.contains(it) }) {
+            return "EXPENSE"
+        }
+
         val incomeKeywords = listOf(
             "recebeu", "recebido", "pix recebido", "transferencia recebida",
-            "credito", "deposito", "cashback", "reembolso", "estorno",
+            "creditado", "credito em conta", "crédito em conta", "deposito", "cashback creditado", "reembolso", "estorno",
             "received", "credited", "salario", "proventos", "dividendo"
         )
         val isIncome = incomeKeywords.any { normalized.contains(it) }
@@ -172,12 +339,19 @@ object BankNotificationParser {
 
     private fun extractMerchant(title: String, text: String, type: String, bankName: String): String {
         val full = "$title $text"
-        val normalized = removeAccents(full.lowercase(Locale.getDefault()))
 
         // Patterns to match establishment / merchant / recipient
         val patterns = listOf(
+            // Google Wallet: "Você pagou R$ 35,00 para Restaurante Solar"
+            Regex("""(?:voc[eê]\s+pagou\s+R?\$?\s*[\d\.\,]+\s+(?:para|em))\s+([A-Za-z0-9\.\-\_\s\*]{2,35})""", RegexOption.IGNORE_CASE),
+            // Google Wallet: "Você pagou R$ 35,00 com Nubank em Restaurante Solar"
+            Regex("""(?:voc[eê]\s+pagou\s+.*?\s+(?:em|no|na|para))\s+([A-Za-z0-9\.\-\_\s\*]{2,35})""", RegexOption.IGNORE_CASE),
+            // Google Wallet: "Restaurante Solar • R$ 35,00"
+            Regex("""([A-Za-z0-9\.\-\_\s\*]{2,35})\s*•\s*R?\$?\s*[\d\.\,]+""", RegexOption.IGNORE_CASE),
+            // Standard Purchases: "Compra aprovada no/na/em Restaurante Solar..."
             Regex("""(?:compra\s+aprovada\s+(?:no|na|em)|compra\s+(?:no|na|em))\s+([A-Za-z0-9\.\-\_\s\*]{3,35})(?:\s+no\s+valor|\s+de\s+R\$|\s+R\$|\s*$|\.)""", RegexOption.IGNORE_CASE),
             Regex("""(?:em|no|na)\s+([A-Za-z0-9\.\-\_\s\*]{3,35})\s+(?:no\s+valor|de\s+R\$|R\$)""", RegexOption.IGNORE_CASE),
+            // Pix & Transfers
             Regex("""(?:pix\s+enviado\s+para|pix\s+para|transferencia\s+para|pagamento\s+para)\s+([A-Za-z0-9\.\-\_\s\*]{3,35})(?:\s+no\s+valor|\s+de\s+R\$|\s*$|\.)""", RegexOption.IGNORE_CASE),
             Regex("""(?:pix\s+recebido\s+de|pix\s+de|recebeu\s+um\s+pix\s+de|transferencia\s+de)\s+([A-Za-z0-9\.\-\_\s\*]{3,35})(?:\s+no\s+valor|\s+de\s+R\$|\s*$|\.)""", RegexOption.IGNORE_CASE),
             Regex("""(?:no|na|em)\s+([A-Za-z0-9\.\-\_\s\*]{3,30})""", RegexOption.IGNORE_CASE)
@@ -193,9 +367,13 @@ object BankNotificationParser {
             }
         }
 
-        // Fallback: Use clean title or first meaningful words
-        val cleanTitle = title.replace(bankName, "", ignoreCase = true).trim()
-        if (cleanTitle.length in 3..40 && !cleanTitle.contains("R$")) {
+        // Fallback: Use clean title if it represents the establishment
+        val cleanTitle = title.replace(bankName, "", ignoreCase = true)
+            .replace("Google Pay", "", ignoreCase = true)
+            .replace("Google Wallet", "", ignoreCase = true)
+            .replace("Carteira", "", ignoreCase = true)
+            .trim()
+        if (cleanTitle.length in 3..40 && !cleanTitle.contains("R$") && isValidMerchantCandidate(cleanTitle, bankName)) {
             return cleanMerchantName(cleanTitle)
         }
 
@@ -206,6 +384,7 @@ object BankNotificationParser {
         val lower = candidate.lowercase(Locale.getDefault())
         if (candidate.length < 2) return false
         if (lower.contains("valor") || lower.contains("reais") || lower.contains("cartao") || lower.contains("fatura")) return false
+        if (lower.contains("google pay") || lower.contains("carteira") || lower.contains("wallet") || lower.contains("google play")) return false
         if (lower.contains(bankName.lowercase(Locale.getDefault()))) return false
         return true
     }
@@ -224,7 +403,8 @@ object BankNotificationParser {
 
     private fun extractCardLastDigits(text: String): String? {
         val regexes = listOf(
-            Regex("""(?:cart[aã]o|final)\s*(\d{4})""", RegexOption.IGNORE_CASE),
+            Regex("""(?:cart[aã]o|final)\s*[:\s]*(\d{4})""", RegexOption.IGNORE_CASE),
+            Regex("""(?:[•\*]{3,4}\s*|final\s*[:\s]*)(\d{4})""", RegexOption.IGNORE_CASE),
             Regex("""final\s*:\s*(\d{4})""", RegexOption.IGNORE_CASE)
         )
         for (regex in regexes) {
@@ -270,7 +450,7 @@ object BankNotificationParser {
         }
     }
 
-    private fun removeAccents(str: String): String {
+    fun removeAccents(str: String): String {
         val normalized = Normalizer.normalize(str, Normalizer.Form.NFD)
         return normalized.replace(Regex("""\p{InCombiningDiacriticalMarks}+"""), "")
     }
