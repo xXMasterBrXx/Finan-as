@@ -115,10 +115,13 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinanceApp(
-    viewModel: FinanceViewModel = viewModel()
+    viewModel: FinanceViewModel = viewModel(),
+    onPromptBiometric: (onSuccess: () -> Unit) -> Unit = {},
+    onCheckBiometricAvailability: () -> com.example.util.BiometricAvailability = { com.example.util.BiometricAvailability.AVAILABLE }
 ) {
     val coroutineScope = rememberCoroutineScope()
     val period by viewModel.currentPeriod.collectAsStateWithLifecycle()
+    val isBiometricEnabled by viewModel.isBiometricAuthEnabled.collectAsStateWithLifecycle()
     val analytics by viewModel.monthlyAnalytics.collectAsStateWithLifecycle()
     val advancedAnalytics by viewModel.advancedAnalytics.collectAsStateWithLifecycle()
     val filteredTransactions by viewModel.filteredMonthlyTransactions.collectAsStateWithLifecycle()
@@ -643,6 +646,14 @@ fun FinanceApp(
                             onBudgetLimitChange = { viewModel.setMonthlyBudgetLimit(it) },
                             hideBalances = hideBalances,
                             onHideBalancesChange = { viewModel.setHideBalances(it) },
+                            isBiometricAuthEnabled = isBiometricEnabled,
+                            onToggleBiometricAuth = { targetState ->
+                                onPromptBiometric {
+                                    viewModel.setBiometricAuthEnabled(targetState)
+                                }
+                            },
+                            onLockAppNow = { viewModel.lockApp() },
+                            biometricAvailabilityMessage = onCheckBiometricAvailability().message,
                             customCategories = customCategories,
                             onAddNewCategory = { type ->
                                 categoryDialogType = type
@@ -791,16 +802,21 @@ fun FinanceApp(
             onSave = { title, amount, type, category, timestamp, note, cardId, isInstallment, totalInstallments, isRecurring, recurringMonths, recurringIntervalMonths, isIndefinite ->
                 val editing = transactionToEdit
                 if (editing != null) {
-                    viewModel.updateTransaction(
-                        editing.copy(
-                            title = title,
-                            amount = amount,
-                            type = type.name,
-                            category = category,
-                            timestamp = timestamp,
-                            note = note,
-                            cardId = cardId
-                        )
+                    viewModel.updateTransactionDetailed(
+                        existing = editing,
+                        title = title,
+                        amount = amount,
+                        type = type,
+                        category = category,
+                        timestamp = timestamp,
+                        note = note,
+                        cardId = cardId,
+                        isInstallment = isInstallment,
+                        totalInstallments = totalInstallments,
+                        isRecurring = isRecurring,
+                        recurringMonths = recurringMonths,
+                        recurringIntervalMonths = recurringIntervalMonths,
+                        isIndefinite = isIndefinite
                     )
                 } else {
                     viewModel.addTransaction(

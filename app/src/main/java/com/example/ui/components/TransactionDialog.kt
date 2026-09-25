@@ -118,7 +118,14 @@ fun TransactionDialog(
     var title by remember { mutableStateOf(transactionToEdit?.title ?: "") }
     var amountText by remember {
         mutableStateOf(
-            if (transactionToEdit != null) String.format(java.util.Locale.US, "%.2f", transactionToEdit.amount) else ""
+            if (transactionToEdit != null) {
+                if (transactionToEdit.isInstallment && transactionToEdit.totalInstallments > 1) {
+                    val total = transactionToEdit.amount * transactionToEdit.totalInstallments
+                    String.format(java.util.Locale.US, "%.2f", total)
+                } else {
+                    String.format(java.util.Locale.US, "%.2f", transactionToEdit.amount)
+                }
+            } else ""
         )
     }
     var note by remember { mutableStateOf(transactionToEdit?.note ?: "") }
@@ -510,8 +517,8 @@ fun TransactionDialog(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Parcelamento Section for Expenses (only when creating new or if already installment)
-            if (selectedType == TransactionType.EXPENSE && transactionToEdit == null && !isRecurring) {
+            // Parcelamento Section for Expenses
+            if (selectedType == TransactionType.EXPENSE && !isRecurring) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -687,7 +694,7 @@ fun TransactionDialog(
             }
 
             // Gastos / Receitas Recorrentes (Fixo mensal)
-            if (transactionToEdit == null && !isInstallment) {
+            if (!isInstallment) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -927,7 +934,15 @@ fun TransactionDialog(
                         } else {
                             "Salvar Lançamento"
                         }
-                    } else "Atualizar Lançamento",
+                    } else {
+                        if (isRecurring) {
+                            "Atualizar Lançamento Recorrente"
+                        } else if (isInstallment && selectedType == TransactionType.EXPENSE) {
+                            "Atualizar Parcelamento (${totalInstallments}x)"
+                        } else {
+                            "Atualizar Lançamento"
+                        }
+                    },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White
                 )

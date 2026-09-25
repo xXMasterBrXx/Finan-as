@@ -373,6 +373,19 @@ class UserPreferences(context: Context) {
     )
     val autoImportNotifyOnImport: StateFlow<Boolean> = _autoImportNotifyOnImport.asStateFlow()
 
+    // Biometric Authentication
+    private val _biometricAuthEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_BIOMETRIC_AUTH_ENABLED, false)
+    )
+    val biometricAuthEnabled: StateFlow<Boolean> = _biometricAuthEnabled.asStateFlow()
+
+    fun isBiometricAuthEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_AUTH_ENABLED, false)
+
+    fun setBiometricAuthEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BIOMETRIC_AUTH_ENABLED, enabled).apply()
+        _biometricAuthEnabled.value = enabled
+    }
+
     fun isInitialDataSeeded(): Boolean {
         return prefs.getBoolean(KEY_HAS_SEEDED_INITIAL_DATA, false)
     }
@@ -667,6 +680,7 @@ class UserPreferences(context: Context) {
         private const val KEY_AUTO_IMPORT_DISABLED_BANKS = "key_auto_import_disabled_banks"
         private const val KEY_LAST_INSTALLED_VERSION_NAME = "key_last_installed_version_name"
         private const val KEY_LAST_INSTALLED_VERSION_CODE = "key_last_installed_version_code"
+        private const val KEY_BIOMETRIC_AUTH_ENABLED = "key_biometric_auth_enabled"
 
         @Volatile
         private var instance: UserPreferences? = null

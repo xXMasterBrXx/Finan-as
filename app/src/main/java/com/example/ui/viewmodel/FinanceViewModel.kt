@@ -200,6 +200,36 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _isNotificationListenerConnected = MutableStateFlow(false)
     val isNotificationListenerConnected: StateFlow<Boolean> = _isNotificationListenerConnected.asStateFlow()
 
+    // Biometric Authentication State
+    val isBiometricAuthEnabled: StateFlow<Boolean> = userPreferences.biometricAuthEnabled
+    private val _isAppUnlocked = MutableStateFlow(!userPreferences.isBiometricAuthEnabled())
+    val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
+    private val _biometricErrorMessage = MutableStateFlow<String?>(null)
+    val biometricErrorMessage: StateFlow<String?> = _biometricErrorMessage.asStateFlow()
+
+    fun lockApp() {
+        if (userPreferences.isBiometricAuthEnabled()) {
+            _isAppUnlocked.value = false
+        }
+    }
+
+    fun unlockApp() {
+        _isAppUnlocked.value = true
+        _biometricErrorMessage.value = null
+    }
+
+    fun setBiometricErrorMessage(msg: String?) {
+        _biometricErrorMessage.value = msg
+    }
+
+    fun setBiometricAuthEnabled(enabled: Boolean) {
+        userPreferences.setBiometricAuthEnabled(enabled)
+        if (!enabled) {
+            _isAppUnlocked.value = true
+            _biometricErrorMessage.value = null
+        }
+    }
+
     val p2pSyncStatus: StateFlow<com.example.data.p2p.P2PSyncStatus>
 
     // All registered cards
@@ -962,6 +992,42 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun deleteInstallmentGroup(groupId: String) {
         viewModelScope.launch {
             repository.deleteInstallmentGroup(groupId)
+        }
+    }
+
+    fun updateTransactionDetailed(
+        existing: TransactionEntity,
+        title: String,
+        amount: Double,
+        type: TransactionType,
+        category: String,
+        timestamp: Long,
+        note: String = "",
+        cardId: Long? = null,
+        isInstallment: Boolean = false,
+        totalInstallments: Int = 1,
+        isRecurring: Boolean = false,
+        recurringMonths: Int = 12,
+        recurringIntervalMonths: Int = 1,
+        isIndefinite: Boolean = true
+    ) {
+        viewModelScope.launch {
+            repository.updateDetailedTransaction(
+                existing = existing,
+                title = title,
+                amount = amount,
+                type = type,
+                category = category,
+                timestamp = timestamp,
+                note = note,
+                cardId = cardId,
+                isInstallment = isInstallment,
+                totalInstallments = totalInstallments,
+                isRecurring = isRecurring,
+                recurringMonths = recurringMonths,
+                recurringIntervalMonths = recurringIntervalMonths,
+                isIndefinite = isIndefinite
+            )
         }
     }
 

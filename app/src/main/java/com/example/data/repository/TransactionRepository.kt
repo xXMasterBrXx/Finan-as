@@ -176,6 +176,158 @@ class TransactionRepository(
         }
     }
 
+    suspend fun updateDetailedTransaction(
+        existing: TransactionEntity,
+        title: String,
+        amount: Double,
+        type: TransactionType,
+        category: String,
+        timestamp: Long,
+        note: String,
+        cardId: Long?,
+        isInstallment: Boolean,
+        totalInstallments: Int,
+        isRecurring: Boolean,
+        recurringMonths: Int,
+        recurringIntervalMonths: Int,
+        isIndefinite: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val wasInstallment = existing.isInstallment && !existing.installmentGroupId.isNullOrEmpty()
+        val wasRecurring = existing.isRecurring && !existing.recurringGroupId.isNullOrEmpty()
+
+        if (wasInstallment) {
+            val oldGroupId = existing.installmentGroupId!!
+            if (isInstallment && totalInstallments > 1 && type == TransactionType.EXPENSE) {
+                deleteInstallmentGroup(oldGroupId)
+                createInstallments(
+                    title = title,
+                    totalAmount = amount,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    totalInstallments = totalInstallments
+                )
+            } else if (isRecurring) {
+                deleteInstallmentGroup(oldGroupId)
+                createRecurring(
+                    title = title,
+                    amount = amount,
+                    type = type,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    monthsCount = recurringMonths,
+                    intervalMonths = recurringIntervalMonths,
+                    isIndefinite = isIndefinite
+                )
+            } else {
+                deleteInstallmentGroup(oldGroupId)
+                insert(
+                    TransactionEntity(
+                        title = title.trim(),
+                        amount = amount,
+                        type = type.name,
+                        category = category,
+                        timestamp = timestamp,
+                        note = note.trim(),
+                        cardId = if (type == TransactionType.EXPENSE) cardId else null,
+                        isInstallment = false,
+                        installmentNumber = 1,
+                        totalInstallments = 1,
+                        installmentGroupId = null,
+                        isRecurring = false
+                    )
+                )
+            }
+        } else if (wasRecurring) {
+            val oldGroupId = existing.recurringGroupId!!
+            if (isRecurring) {
+                deleteRecurringGroup(oldGroupId)
+                createRecurring(
+                    title = title,
+                    amount = amount,
+                    type = type,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    monthsCount = recurringMonths,
+                    intervalMonths = recurringIntervalMonths,
+                    isIndefinite = isIndefinite
+                )
+            } else if (isInstallment && totalInstallments > 1 && type == TransactionType.EXPENSE) {
+                deleteRecurringGroup(oldGroupId)
+                createInstallments(
+                    title = title,
+                    totalAmount = amount,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    totalInstallments = totalInstallments
+                )
+            } else {
+                deleteRecurringGroup(oldGroupId)
+                insert(
+                    TransactionEntity(
+                        title = title.trim(),
+                        amount = amount,
+                        type = type.name,
+                        category = category,
+                        timestamp = timestamp,
+                        note = note.trim(),
+                        cardId = if (type == TransactionType.EXPENSE) cardId else null,
+                        isRecurring = false,
+                        recurringGroupId = null
+                    )
+                )
+            }
+        } else {
+            if (isInstallment && totalInstallments > 1 && type == TransactionType.EXPENSE) {
+                delete(existing)
+                createInstallments(
+                    title = title,
+                    totalAmount = amount,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    totalInstallments = totalInstallments
+                )
+            } else if (isRecurring) {
+                delete(existing)
+                createRecurring(
+                    title = title,
+                    amount = amount,
+                    type = type,
+                    category = category,
+                    startTimestamp = timestamp,
+                    note = note,
+                    cardId = cardId,
+                    monthsCount = recurringMonths,
+                    intervalMonths = recurringIntervalMonths,
+                    isIndefinite = isIndefinite
+                )
+            } else {
+                update(
+                    existing.copy(
+                        title = title.trim(),
+                        amount = amount,
+                        type = type.name,
+                        category = category,
+                        timestamp = timestamp,
+                        note = note.trim(),
+                        cardId = if (type == TransactionType.EXPENSE) cardId else null,
+                        isInstallment = false,
+                        isRecurring = false
+                    )
+                )
+            }
+        }
+    }
+
     suspend fun update(transaction: TransactionEntity) = withContext(Dispatchers.IO) {
         val updated = transaction.copy(updatedAt = System.currentTimeMillis())
         transactionDao.update(updated)

@@ -209,6 +209,7 @@ fun ImportedNotificationsBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -218,19 +219,25 @@ fun ImportedNotificationsBottomSheet(
                                     .clip(CircleShape)
                                     .background(IncomeGreen)
                             )
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
                                     text = "Leitor de Notificações Ativo",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = if (isListenerConnected) "Monitorando compras e Pix em tempo real" else "Serviço registrado no sistema Android",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         FilledTonalButton(
                             onClick = onScanActiveNotifications,
@@ -240,7 +247,12 @@ fun ImportedNotificationsBottomSheet(
                         ) {
                             Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Escanear Agora", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                            Text(
+                                text = "Escanear",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }

@@ -52,6 +52,8 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.EventRepeat
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CreditCardOff
 import androidx.compose.material.icons.filled.PieChart
@@ -145,6 +147,10 @@ fun SettingsScreen(
     onBudgetLimitChange: (Double) -> Unit,
     hideBalances: Boolean,
     onHideBalancesChange: (Boolean) -> Unit,
+    isBiometricAuthEnabled: Boolean = false,
+    onToggleBiometricAuth: (Boolean) -> Unit = {},
+    onLockAppNow: () -> Unit = {},
+    biometricAvailabilityMessage: String = "",
     customCategories: List<CategoryItem> = emptyList(),
     onAddNewCategory: (TransactionType) -> Unit = {},
     onEditCategory: (CategoryItem) -> Unit = {},
@@ -499,6 +505,69 @@ fun SettingsScreen(
                     onClick = { showCategoriesSheet = true },
                     testTag = "settings_categories_row"
                 )
+            }
+        }
+
+        // ==========================================
+        // 3. SEGURANÇA E PRIVACIDADE
+        // ==========================================
+        val showSecurityGroup = query.isEmpty() ||
+                "segurança".contains(query) ||
+                "privacidade".contains(query) ||
+                "biometria".contains(query) ||
+                "digital".contains(query) ||
+                "facial".contains(query) ||
+                "bloqueio".contains(query) ||
+                "proteção".contains(query) ||
+                "senha".contains(query)
+
+        if (showSecurityGroup) {
+            SettingsGroup(title = "SEGURANÇA E PRIVACIDADE") {
+                SettingsGroupRow(
+                    icon = Icons.Default.Fingerprint,
+                    title = "Autenticação Biométrica",
+                    subtitle = if (isBiometricAuthEnabled) {
+                        "Painel protegido por digital, face ou senha do aparelho"
+                    } else {
+                        "Exigir biometria ao abrir o app para proteger seus dados"
+                    },
+                    trailing = {
+                        Switch(
+                            checked = isBiometricAuthEnabled,
+                            onCheckedChange = onToggleBiometricAuth,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.testTag("settings_biometric_switch")
+                        )
+                    },
+                    onClick = { onToggleBiometricAuth(!isBiometricAuthEnabled) }
+                )
+
+                if (biometricAvailabilityMessage.isNotBlank()) {
+                    SettingsRowDivider()
+                    SettingsGroupRow(
+                        icon = Icons.Default.Security,
+                        title = "Status do Sensor",
+                        subtitle = biometricAvailabilityMessage,
+                        valueText = if (isBiometricAuthEnabled) "Ativo" else "Inativo",
+                        onClick = {},
+                        testTag = "settings_biometric_status_row"
+                    )
+                }
+
+                if (isBiometricAuthEnabled) {
+                    SettingsRowDivider()
+                    SettingsGroupRow(
+                        icon = Icons.Default.Lock,
+                        title = "Bloquear Agora",
+                        subtitle = "Bloquear o painel imediatamente para testar ou proteger",
+                        valueText = "Bloquear",
+                        onClick = onLockAppNow,
+                        testTag = "settings_lock_now_button"
+                    )
+                }
             }
         }
 
