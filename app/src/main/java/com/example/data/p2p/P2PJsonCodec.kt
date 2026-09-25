@@ -158,12 +158,24 @@ object P2PJsonCodec {
         }
     }
 
+    fun extractInvoices(json: JSONObject, key: String): Set<String> {
+        val arr = json.optJSONArray(key) ?: return emptySet()
+        val set = mutableSetOf<String>()
+        for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotBlank()) set.add(s)
+        }
+        return set
+    }
+
     fun createSnapshotOverwrite(
         senderId: String,
         transactions: List<TransactionEntity>,
         cards: List<CreditCardEntity>,
         categories: List<CustomCategoryEntity>,
-        cardSyncUuidMap: Map<Long, String> = emptyMap()
+        cardSyncUuidMap: Map<Long, String> = emptyMap(),
+        paidInvoices: Set<String> = emptySet(),
+        unpaidInvoices: Set<String> = emptySet()
     ): JSONObject {
         val txArray = JSONArray()
         transactions.forEach { tx ->
@@ -183,6 +195,8 @@ object P2PJsonCodec {
             put("transactions", txArray)
             put("cards", cardsArray)
             put("categories", catArray)
+            put("paidInvoices", JSONArray(paidInvoices))
+            put("unpaidInvoices", JSONArray(unpaidInvoices))
             put("timestamp", System.currentTimeMillis())
         }
     }
@@ -201,7 +215,10 @@ object P2PJsonCodec {
         transactions: List<TransactionEntity>,
         cards: List<CreditCardEntity>,
         categories: List<CustomCategoryEntity>,
-        cardSyncUuidMap: Map<Long, String> = emptyMap()
+        cardSyncUuidMap: Map<Long, String> = emptyMap(),
+        paidInvoices: Set<String> = emptySet(),
+        unpaidInvoices: Set<String> = emptySet(),
+        requiresResponse: Boolean = false
     ): JSONObject {
         val txArray = JSONArray()
         transactions.forEach { tx ->
@@ -218,9 +235,12 @@ object P2PJsonCodec {
         return JSONObject().apply {
             put("type", "SYNC_RESP")
             put("senderId", senderId)
+            put("requiresResponse", requiresResponse)
             put("transactions", txArray)
             put("cards", cardsArray)
             put("categories", catArray)
+            put("paidInvoices", JSONArray(paidInvoices))
+            put("unpaidInvoices", JSONArray(unpaidInvoices))
             put("timestamp", System.currentTimeMillis())
         }
     }

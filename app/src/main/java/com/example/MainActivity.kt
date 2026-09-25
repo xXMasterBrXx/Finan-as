@@ -22,11 +22,14 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.FinanceViewModel
 
 class MainActivity : ComponentActivity() {
+  private var financeViewModel: FinanceViewModel? = null
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
       val viewModel: FinanceViewModel = viewModel()
+      financeViewModel = viewModel
       val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
       val themeColor by viewModel.themeColor.collectAsStateWithLifecycle()
       val customColorHex by viewModel.customThemeColorHex.collectAsStateWithLifecycle()
@@ -39,6 +42,11 @@ class MainActivity : ComponentActivity() {
         FinanceApp(viewModel = viewModel)
       }
     }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    financeViewModel?.refreshNotificationListenerStatus()
   }
 }
 

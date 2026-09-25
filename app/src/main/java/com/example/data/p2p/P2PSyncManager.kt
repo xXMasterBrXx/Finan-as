@@ -220,18 +220,23 @@ class P2PSyncManager(
                                 role = peerRole
                             )
 
+                            activeConnections[peerSenderId]?.close()
                             val connection = PeerConnection(socket, reader, writer, peerDevice)
                             activeConnections[peerSenderId] = connection
                             updateConnectedPeersState()
 
-                            // If this device is the HOST and peer is CLIENT (or peer needs initial sync),
-                            // HOST immediately sends the full authoritative snapshot overwrite
-                            if (myRole == P2PRole.HOST && (!peerInitialSyncDone || peerRole == P2PRole.CLIENT)) {
+                            // If this device is HOST and peer is a brand new CLIENT that hasn't done initial sync,
+                            // HOST sends the initial authoritative snapshot.
+                            // If this device is CLIENT and hasn't done initial sync, request snapshot.
+                            // If both devices have completed initial sync (reconnection of established peers),
+                            // perform BIDIRECTIONAL SYNC so changes from both sides are preserved and merged!
+                            if (myRole == P2PRole.HOST && !peerInitialSyncDone) {
                                 sendSnapshotOverwriteToConnection(connection)
                             } else if (!myInitialSyncDone && myRole == P2PRole.CLIENT) {
-                                // Request full snapshot from host
                                 val syncReq = P2PJsonCodec.createSyncRequest(deviceId)
                                 writer.println(syncReq.toString())
+                            } else {
+                                sendSyncDataToConnection(connection, requiresResponse = true)
                             }
 
                             listenToConnection(connection)
@@ -319,17 +324,22 @@ class P2PSyncManager(
                         role = peerRole
                     )
 
+                    activeConnections[peerId]?.close()
                     val connection = PeerConnection(socket, reader, writer, peerDevice)
                     activeConnections[peerId] = connection
                     updateConnectedPeersState()
 
-                    // If we are HOST and peer is CLIENT, send snapshot overwrite immediately
-                    if (myRole == P2PRole.HOST && (!peerInitialSyncDone || peerRole == P2PRole.CLIENT)) {
+                    // If this device is HOST and peer has not completed initial sync, send snapshot.
+                    // If this device is CLIENT and has not completed initial sync, request snapshot.
+                    // If both devices have completed initial sync (reconnection of established peers),
+                    // perform BIDIRECTIONAL SYNC so changes from both sides are preserved and merged!
+                    if (myRole == P2PRole.HOST && !peerInitialSyncDone) {
                         sendSnapshotOverwriteToConnection(connection)
                     } else if (myRole == P2PRole.CLIENT && !myInitialSyncDone) {
-                        // We are client waiting for Host's snapshot
                         val syncReq = P2PJsonCodec.createSyncRequest(deviceId)
                         writer.println(syncReq.toString())
+                    } else {
+                        sendSyncDataToConnection(connection, requiresResponse = true)
                     }
 
                     scope.launch { listenToConnection(connection) }
@@ -369,8 +379,15 @@ class P2PSyncManager(
 
             when (type) {
                 "SNAPSHOT_OVERWRITE" -> {
-                    // Receiver of the sync key receives the authoritative snapshot from the host.
-                    // Local database is completely and cleanly overwritten by the Host's data.
+                    // Receiver of the sync key receives authoritative snapshot from the host.
+                    // If initial sync was ALREADY completed in the past, this is a reconnecting device.
+                    // DO NOT wipe the database! Reconcile incoming data instead so offline changes are preserved!
+                    if (_syncStatus.value.isInitialSyncDone) {
+                        Log.d(tag, "SNAPSHOT_OVERWRITE recebido após initialSyncDone; reconciliando bidirecionalmente.")
+                        handleSyncResponse(json, fromConn)
+                        return
+                    }
+
                     _syncStatus.value = _syncStatus.value.copy(
                         state = P2PConnectionState.SYNCING,
                         lastEventMessage = "Recebendo dados originais de ${fromConn.device.name}..."
@@ -383,7 +400,7 @@ class P2PSyncManager(
                         val cardsArray = json.optJSONArray("cards")
                         val cardUuidToNewIdMap = mutableMapOf<String, Long>()
 
-                        // Clear local data cleanly
+                        // Clear local data cleanly on first initial pairing only
                         database.transactionDao().deleteAllTransactions()
                         database.creditCardDao().deleteAllCards()
                         database.customCategoryDao().deleteAllCategories()
@@ -432,6 +449,12 @@ class P2PSyncManager(
                             }
                         }
 
+                        // 4. Reconcile invoices if present
+                        reconcileInvoices(
+                            paidInvoices = P2PJsonCodec.extractInvoices(json, "paidInvoices"),
+                            unpaidInvoices = P2PJsonCodec.extractInvoices(json, "unpaidInvoices")
+                        )
+
                         // Mark initial sync complete
                         userPreferences.setP2PInitialSyncDone(true)
                         userPreferences.setInitialDataSeeded(true)
@@ -457,79 +480,19 @@ class P2PSyncManager(
                     val count = json.optInt("count", 0)
                     _syncStatus.value = _syncStatus.value.copy(
                         state = P2PConnectionState.CONNECTED,
+                        isInitialSyncDone = true,
                         lastSyncTimestamp = System.currentTimeMillis(),
                         lastEventMessage = "Dados originais espelhados no outro aparelho com sucesso ($count registros)."
                     )
                 }
 
                 "SYNC_REQ" -> {
-                    // Send authoritative snapshot if Host, or current dataset if already synced
-                    val txList = database.transactionDao().getAllRawTransactions()
-                    val cardList = database.creditCardDao().getAllRawCards()
-                    val catList = database.customCategoryDao().getAllRawCategories()
-                    val cardUuidMap = cardList.associate { it.id to it.syncUuid }
-
-                    if (_syncStatus.value.role == P2PRole.HOST) {
-                        val resp = P2PJsonCodec.createSnapshotOverwrite(deviceId, txList, cardList, catList, cardUuidMap)
-                        fromConn.writer.println(resp.toString())
-                    } else {
-                        val resp = P2PJsonCodec.createSyncResponse(deviceId, txList, cardList, catList, cardUuidMap)
-                        fromConn.writer.println(resp.toString())
-                    }
+                    // Send our full dataset to peer without requiring a response
+                    sendSyncDataToConnection(fromConn, requiresResponse = false)
                 }
 
                 "SYNC_RESP" -> {
-                    _syncStatus.value = _syncStatus.value.copy(
-                        state = P2PConnectionState.SYNCING,
-                        lastEventMessage = "Sincronizando atualizações com ${fromConn.device.name}..."
-                    )
-
-                    isApplyingRemoteSync = true
-                    var syncedCount = 0
-                    try {
-                        // Cards
-                        val cardsArray = json.optJSONArray("cards")
-                        if (cardsArray != null) {
-                            for (i in 0 until cardsArray.length()) {
-                                val cardJson = cardsArray.getJSONObject(i)
-                                val incomingCard = P2PJsonCodec.jsonToCard(cardJson)
-                                reconcileCard(incomingCard)
-                                syncedCount++
-                            }
-                        }
-
-                        // Categories
-                        val catArray = json.optJSONArray("categories")
-                        if (catArray != null) {
-                            for (i in 0 until catArray.length()) {
-                                val catJson = catArray.getJSONObject(i)
-                                val incomingCat = P2PJsonCodec.jsonToCategory(catJson)
-                                reconcileCategory(incomingCat)
-                                syncedCount++
-                            }
-                        }
-
-                        // Transactions
-                        val txArray = json.optJSONArray("transactions")
-                        if (txArray != null) {
-                            for (i in 0 until txArray.length()) {
-                                val txJson = txArray.getJSONObject(i)
-                                val incomingTx = P2PJsonCodec.jsonToTransaction(txJson)
-                                val cardSyncUuid = P2PJsonCodec.extractCardSyncUuid(txJson)
-                                reconcileTransaction(incomingTx, cardSyncUuid)
-                                syncedCount++
-                            }
-                        }
-                    } finally {
-                        isApplyingRemoteSync = false
-                    }
-
-                    _syncStatus.value = _syncStatus.value.copy(
-                        state = P2PConnectionState.CONNECTED,
-                        lastSyncTimestamp = System.currentTimeMillis(),
-                        syncedItemsCount = _syncStatus.value.syncedItemsCount + syncedCount,
-                        lastEventMessage = "Sincronização concluída com sucesso ($syncedCount registros)."
-                    )
+                    handleSyncResponse(json, fromConn)
                 }
 
                 "TX_UPSERT" -> {
@@ -672,19 +635,188 @@ class P2PSyncManager(
             val catList = database.customCategoryDao().getAllRawCategories()
             val cardUuidMap = cardList.associate { it.id to it.syncUuid }
 
-            val snapshot = P2PJsonCodec.createSnapshotOverwrite(deviceId, txList, cardList, catList, cardUuidMap)
+            val paidInvoicesMapped = userPreferences.paidInvoices.value.mapNotNull { key ->
+                val parts = key.split("_")
+                if (parts.size == 3) {
+                    val cardId = parts[0].toLongOrNull()
+                    val cardSyncUuid = cardId?.let { cardUuidMap[it] }
+                    if (cardSyncUuid != null) "${cardSyncUuid}_${parts[1]}_${parts[2]}" else null
+                } else null
+            }.toSet()
+
+            val unpaidInvoicesMapped = userPreferences.unpaidInvoices.value.mapNotNull { key ->
+                val parts = key.split("_")
+                if (parts.size == 3) {
+                    val cardId = parts[0].toLongOrNull()
+                    val cardSyncUuid = cardId?.let { cardUuidMap[it] }
+                    if (cardSyncUuid != null) "${cardSyncUuid}_${parts[1]}_${parts[2]}" else null
+                } else null
+            }.toSet()
+
+            val snapshot = P2PJsonCodec.createSnapshotOverwrite(
+                senderId = deviceId,
+                transactions = txList,
+                cards = cardList,
+                categories = catList,
+                cardSyncUuidMap = cardUuidMap,
+                paidInvoices = paidInvoicesMapped,
+                unpaidInvoices = unpaidInvoicesMapped
+            )
             conn.writer.println(snapshot.toString())
         } catch (e: Exception) {
             Log.e(tag, "Erro ao enviar snapshot overwrite", e)
         }
     }
 
+    private suspend fun handleSyncResponse(json: JSONObject, fromConn: PeerConnection) {
+        _syncStatus.value = _syncStatus.value.copy(
+            state = P2PConnectionState.SYNCING,
+            lastEventMessage = "Sincronizando atualizações com ${fromConn.device.name}..."
+        )
+
+        isApplyingRemoteSync = true
+        var syncedCount = 0
+        try {
+            // 1. Reconcile Credit Cards first
+            val cardsArray = json.optJSONArray("cards")
+            if (cardsArray != null) {
+                for (i in 0 until cardsArray.length()) {
+                    val cardJson = cardsArray.getJSONObject(i)
+                    val incomingCard = P2PJsonCodec.jsonToCard(cardJson)
+                    reconcileCard(incomingCard)
+                    syncedCount++
+                }
+            }
+
+            // 2. Reconcile Custom Categories second
+            val catArray = json.optJSONArray("categories")
+            if (catArray != null) {
+                for (i in 0 until catArray.length()) {
+                    val catJson = catArray.getJSONObject(i)
+                    val incomingCat = P2PJsonCodec.jsonToCategory(catJson)
+                    reconcileCategory(incomingCat)
+                    syncedCount++
+                }
+            }
+
+            // 3. Reconcile Transactions third (with mapped card IDs)
+            val txArray = json.optJSONArray("transactions")
+            if (txArray != null) {
+                for (i in 0 until txArray.length()) {
+                    val txJson = txArray.getJSONObject(i)
+                    val incomingTx = P2PJsonCodec.jsonToTransaction(txJson)
+                    val cardSyncUuid = P2PJsonCodec.extractCardSyncUuid(txJson)
+                    reconcileTransaction(incomingTx, cardSyncUuid)
+                    syncedCount++
+                }
+            }
+
+            // 4. Reconcile Invoices
+            reconcileInvoices(
+                paidInvoices = P2PJsonCodec.extractInvoices(json, "paidInvoices"),
+                unpaidInvoices = P2PJsonCodec.extractInvoices(json, "unpaidInvoices")
+            )
+
+            userPreferences.setP2PInitialSyncDone(true)
+            userPreferences.setInitialDataSeeded(true)
+        } finally {
+            isApplyingRemoteSync = false
+        }
+
+        val requiresResponse = json.optBoolean("requiresResponse", false)
+        if (requiresResponse) {
+            // Send back our reconciled state so the peer also receives all our offline adjustments!
+            sendSyncDataToConnection(fromConn, requiresResponse = false)
+        }
+
+        _syncStatus.value = _syncStatus.value.copy(
+            state = P2PConnectionState.CONNECTED,
+            isInitialSyncDone = true,
+            lastSyncTimestamp = System.currentTimeMillis(),
+            syncedItemsCount = _syncStatus.value.syncedItemsCount + syncedCount,
+            lastEventMessage = "Sincronização bidirecional concluída ($syncedCount registros)."
+        )
+    }
+
+    private suspend fun sendSyncDataToConnection(conn: PeerConnection, requiresResponse: Boolean) = withContext(Dispatchers.IO) {
+        try {
+            val txList = database.transactionDao().getAllRawTransactions()
+            val cardList = database.creditCardDao().getAllRawCards()
+            val catList = database.customCategoryDao().getAllRawCategories()
+            val cardUuidMap = cardList.associate { it.id to it.syncUuid }
+
+            val paidInvoicesMapped = userPreferences.paidInvoices.value.mapNotNull { key ->
+                val parts = key.split("_")
+                if (parts.size == 3) {
+                    val cardId = parts[0].toLongOrNull()
+                    val cardSyncUuid = cardId?.let { cardUuidMap[it] }
+                    if (cardSyncUuid != null) "${cardSyncUuid}_${parts[1]}_${parts[2]}" else null
+                } else null
+            }.toSet()
+
+            val unpaidInvoicesMapped = userPreferences.unpaidInvoices.value.mapNotNull { key ->
+                val parts = key.split("_")
+                if (parts.size == 3) {
+                    val cardId = parts[0].toLongOrNull()
+                    val cardSyncUuid = cardId?.let { cardUuidMap[it] }
+                    if (cardSyncUuid != null) "${cardSyncUuid}_${parts[1]}_${parts[2]}" else null
+                } else null
+            }.toSet()
+
+            val resp = P2PJsonCodec.createSyncResponse(
+                senderId = deviceId,
+                transactions = txList,
+                cards = cardList,
+                categories = catList,
+                cardSyncUuidMap = cardUuidMap,
+                paidInvoices = paidInvoicesMapped,
+                unpaidInvoices = unpaidInvoicesMapped,
+                requiresResponse = requiresResponse
+            )
+            conn.writer.println(resp.toString())
+        } catch (e: Exception) {
+            Log.e(tag, "Erro ao enviar dados de sincronização para ${conn.device.name}", e)
+        }
+    }
+
+    private suspend fun reconcileInvoices(paidInvoices: Set<String>, unpaidInvoices: Set<String>) {
+        if (paidInvoices.isEmpty() && unpaidInvoices.isEmpty()) return
+        val allCards = database.creditCardDao().getAllRawCards()
+        val cardMap = allCards.associateBy { it.syncUuid }
+
+        paidInvoices.forEach { item ->
+            val parts = item.split("_")
+            if (parts.size == 3) {
+                val cardSyncUuid = parts[0]
+                val year = parts[1].toIntOrNull()
+                val month = parts[2].toIntOrNull()
+                val card = cardMap[cardSyncUuid]
+                if (card != null && year != null && month != null) {
+                    userPreferences.setInvoicePaid(card.id, year, month, true)
+                }
+            }
+        }
+
+        unpaidInvoices.forEach { item ->
+            val parts = item.split("_")
+            if (parts.size == 3) {
+                val cardSyncUuid = parts[0]
+                val year = parts[1].toIntOrNull()
+                val month = parts[2].toIntOrNull()
+                val card = cardMap[cardSyncUuid]
+                if (card != null && year != null && month != null) {
+                    userPreferences.setInvoicePaid(card.id, year, month, false)
+                }
+            }
+        }
+    }
+
     private suspend fun reconcileTransaction(incoming: TransactionEntity, cardSyncUuid: String? = null) {
         val resolvedCardId = if (!cardSyncUuid.isNullOrBlank()) {
             val card = database.creditCardDao().getBySyncUuid(cardSyncUuid)
-            card?.id ?: incoming.cardId
+            card?.id
         } else {
-            incoming.cardId
+            null
         }
         val toSave = incoming.copy(cardId = resolvedCardId)
         val existing = database.transactionDao().getBySyncUuid(toSave.syncUuid)
@@ -782,10 +914,11 @@ class P2PSyncManager(
         scope.launch {
             _syncStatus.value = _syncStatus.value.copy(
                 state = P2PConnectionState.SYNCING,
-                lastEventMessage = "Solicitando sincronização total..."
+                lastEventMessage = "Sincronizando com aparelhos conectados..."
             )
-            val req = P2PJsonCodec.createSyncRequest(deviceId)
-            broadcast(req.toString())
+            activeConnections.values.forEach { conn ->
+                sendSyncDataToConnection(conn, requiresResponse = true)
+            }
         }
     }
 

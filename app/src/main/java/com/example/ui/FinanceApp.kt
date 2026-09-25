@@ -162,6 +162,8 @@ fun FinanceApp(
     val pendingImportedNotifications by viewModel.pendingImportedNotifications.collectAsStateWithLifecycle()
     val allImportedNotifications by viewModel.allImportedNotifications.collectAsStateWithLifecycle()
     val pendingImportedCount by viewModel.pendingImportedCount.collectAsStateWithLifecycle()
+    val isNotificationListenerGranted by viewModel.isNotificationListenerGranted.collectAsStateWithLifecycle()
+    val isNotificationListenerConnected by viewModel.isNotificationListenerConnected.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -290,7 +292,10 @@ fun FinanceApp(
                 actions = {
                     if (selectedTab != 4) {
                         IconButton(
-                            onClick = { showImportedNotificationsSheet = true },
+                            onClick = {
+                                viewModel.refreshNotificationListenerStatus()
+                                showImportedNotificationsSheet = true
+                            },
                             modifier = Modifier.testTag("bank_import_bell_icon")
                         ) {
                             BadgedBox(
@@ -972,6 +977,14 @@ fun FinanceApp(
             pendingNotifications = pendingImportedNotifications,
             allNotifications = allImportedNotifications,
             creditCards = creditCards,
+            isPermissionGranted = isNotificationListenerGranted,
+            isListenerConnected = isNotificationListenerConnected,
+            onRequestPermission = {
+                viewModel.openNotificationListenerSettings()
+            },
+            onScanActiveNotifications = {
+                viewModel.scanActiveBankNotifications()
+            },
             onDismissRequest = { showImportedNotificationsSheet = false },
             onConfirmImport = { id, merchant, amount, category, cardId ->
                 viewModel.confirmAndImportNotification(id, merchant, amount, category, cardId)
@@ -991,6 +1004,13 @@ fun FinanceApp(
                     "Nubank",
                     "Compra de R$ 89,90 aprovada no iFood com o cartão final 1234."
                 )
+            },
+            onSimulatePreset = { pkg, title, text ->
+                viewModel.simulateBankNotification(pkg, title, text)
+            },
+            onOpenSettings = {
+                showImportedNotificationsSheet = false
+                showBankImportSettingsSheet = true
             }
         )
     }

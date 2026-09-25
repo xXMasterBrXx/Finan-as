@@ -182,13 +182,7 @@ fun BankImportSettingsSheet(
                     if (!isPermissionGranted) {
                         Button(
                             onClick = {
-                                try {
-                                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    val intent = Intent(Settings.ACTION_SETTINGS)
-                                    context.startActivity(intent)
-                                }
+                                com.example.util.NotificationManagerHelper.openNotificationListenerSettings(context)
                             },
                             modifier = Modifier.fillMaxWidth().testTag("grant_notification_listener_button"),
                             shape = RoundedCornerShape(10.dp)
@@ -488,10 +482,5 @@ private data class BankInfo(
 )
 
 private fun checkNotificationListenerPermission(context: android.content.Context): Boolean {
-    return try {
-        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-        flat != null && flat.contains(context.packageName)
-    } catch (e: Exception) {
-        false
-    }
+    return com.example.util.NotificationManagerHelper.isNotificationListenerPermissionGranted(context)
 }

@@ -363,22 +363,23 @@ fun P2PSyncDialog(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(ExpenseRed.copy(alpha = 0.15f))
+                                        .background(EmeraldPrimary.copy(alpha = 0.15f))
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        .testTag("p2p_tab_secondary_badge")
                                 ) {
                                     Text(
-                                        text = "SUBSTITUIÇÃO DE DADOS LOCAIS",
+                                        text = "SINCRONIZAÇÃO BIDIRECIONAL",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = ExpenseRed
+                                        color = EmeraldPrimary
                                     )
                                 }
 
-                                // Warning Note
+                                // Info Note
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp),
-                                    color = ExpenseRed.copy(alpha = 0.08f)
+                                    color = EmeraldPrimary.copy(alpha = 0.08f)
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -388,13 +389,13 @@ fun P2PSyncDialog(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Warning,
+                                            imageVector = Icons.Default.Sync,
                                             contentDescription = null,
-                                            tint = ExpenseRed,
+                                            tint = EmeraldPrimary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            text = "Ao conectar com a chave do aparelho principal, os lançamentos, cartões e categorias deste celular serão substituídos pelo banco de dados do aparelho principal para manter tudo 100% igual e espelhado.",
+                                            text = "Conecte-se com a chave do aparelho principal. Na primeira conexão, os dados são sincronizados. Depois, qualquer alteração feita por você ou pelo outro aparelho (mesmo fora da conexão) será preservada e sincronizada para ambos ao reconectar.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )

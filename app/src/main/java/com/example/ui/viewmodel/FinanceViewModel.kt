@@ -194,6 +194,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val allImportedNotifications: StateFlow<List<ImportedNotificationEntity>>
     val pendingImportedCount: StateFlow<Int>
 
+    private val _isNotificationListenerGranted = MutableStateFlow(false)
+    val isNotificationListenerGranted: StateFlow<Boolean> = _isNotificationListenerGranted.asStateFlow()
+
+    private val _isNotificationListenerConnected = MutableStateFlow(false)
+    val isNotificationListenerConnected: StateFlow<Boolean> = _isNotificationListenerConnected.asStateFlow()
+
     val p2pSyncStatus: StateFlow<com.example.data.p2p.P2PSyncStatus>
 
     // All registered cards
@@ -314,6 +320,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             NotificationManagerHelper.createNotificationChannel(application)
             NotificationManagerHelper.scheduleDailyAlarm(application)
             checkNotificationsNow()
+            refreshNotificationListenerStatus()
         }
     }
 
@@ -1450,5 +1457,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             importedNotificationRepository.processNotification(packageName, title, text, null)
         }
+    }
+
+    fun refreshNotificationListenerStatus() {
+        val app = getApplication<Application>()
+        val granted = NotificationManagerHelper.isNotificationListenerPermissionGranted(app)
+        _isNotificationListenerGranted.value = granted
+        _isNotificationListenerConnected.value = com.example.service.BankNotificationListenerService.isServiceConnected
+
+        if (granted) {
+            NotificationManagerHelper.rebindNotificationListener(app)
+        }
+    }
+
+    fun openNotificationListenerSettings() {
+        val app = getApplication<Application>()
+        NotificationManagerHelper.openNotificationListenerSettings(app)
+    }
+
+    fun scanActiveBankNotifications(): Int {
+        val count = com.example.service.BankNotificationListenerService.scanActiveNotifications()
+        refreshNotificationListenerStatus()
+        return count
     }
 }

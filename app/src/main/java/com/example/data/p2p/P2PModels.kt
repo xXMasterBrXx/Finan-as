@@ -11,8 +11,8 @@ enum class P2PConnectionState {
 }
 
 enum class P2PRole {
-    HOST,    // Dispositivo que fornece a chave (detentor dos dados originais)
-    CLIENT   // Dispositivo que recebe a chave (recebe o snapshot e sobrepõe seus dados locais)
+    HOST,    // Aparelho principal (gera a chave e sincroniza bidirecionalmente)
+    CLIENT   // Aparelho secundário (conecta com a chave e sincroniza bidirecionalmente)
 }
 
 data class P2PDevice(

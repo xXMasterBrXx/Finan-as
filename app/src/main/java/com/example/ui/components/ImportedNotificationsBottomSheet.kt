@@ -41,15 +41,22 @@ fun ImportedNotificationsBottomSheet(
     pendingNotifications: List<ImportedNotificationEntity>,
     allNotifications: List<ImportedNotificationEntity>,
     creditCards: List<CreditCardEntity>,
+    isPermissionGranted: Boolean = true,
+    isListenerConnected: Boolean = true,
+    onRequestPermission: () -> Unit = {},
+    onScanActiveNotifications: () -> Unit = {},
     onDismissRequest: () -> Unit,
     onConfirmImport: (id: Long, merchant: String, amount: Double, category: String, cardId: Long?) -> Unit,
     onDiscard: (id: Long) -> Unit,
     onImportAll: () -> Unit,
     onClearHistory: () -> Unit,
-    onSimulateNotification: () -> Unit
+    onSimulateNotification: () -> Unit,
+    onSimulatePreset: (pkg: String, title: String, text: String) -> Unit = { _, _, _ -> },
+    onOpenSettings: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Pendentes, 1 = Histórico
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Pendentes, 1 = Histórico
+    var showCustomTestDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -81,7 +88,7 @@ fun ImportedNotificationsBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.NotificationsActive,
+                            imageVector = Icons.Default.ReceiptLong,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
@@ -95,24 +102,151 @@ fun ImportedNotificationsBottomSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (pendingNotifications.isNotEmpty()) "${pendingNotifications.size} pendente(s) para revisar" else "Nenhum lançamento pendente",
+                            text = if (pendingNotifications.isNotEmpty()) "${pendingNotifications.size} pendente(s) para revisar" else "Reconhecimento automático de compras e Pix",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                IconButton(
-                    onClick = onDismissRequest,
-                    modifier = Modifier.testTag("close_imported_sheet_button")
-                ) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.testTag("open_bank_settings_from_sheet")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Configurar Bancos",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.testTag("close_imported_sheet_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar")
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Tab Selector & Test Action
+            // Permission Status Alert or Live Monitoring Bar
+            if (!isPermissionGranted) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Acesso a Notificações Desativado",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Text(
+                            text = "Para que o BUMoney identifique seus gastos e Pix no Nubank, Itaú, Inter e outros, você precisa ativar o acesso a notificações nas configurações do Android.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = onRequestPermission,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("sheet_grant_permission_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Ativar Acesso no Android")
+                        }
+
+                        Text(
+                            text = "Dica: No Android 13+, se o botão estiver esmaecido, abra Configurações > Apps > BUMoney > toque nos 3 pontinhos > 'Permitir configurações restritas'.",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = IncomeGreen.copy(alpha = 0.08f)
+                    ),
+                    border = BorderStroke(1.dp, IncomeGreen.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(IncomeGreen)
+                            )
+                            Column {
+                                Text(
+                                    text = "Leitor de Notificações Ativo",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isListenerConnected) "Monitorando compras e Pix em tempo real" else "Serviço registrado no sistema Android",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        FilledTonalButton(
+                            onClick = onScanActiveNotifications,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.testTag("scan_active_notifications_button")
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Escanear Agora", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                        }
+                    }
+                }
+            }
+
+            // Tab Selector & Quick Simulator Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -146,15 +280,17 @@ fun ImportedNotificationsBottomSheet(
                     )
                 }
 
-                // Quick Simulation button for testing
+                // Simulation / Test menu
                 FilledTonalButton(
-                    onClick = onSimulateNotification,
+                    onClick = { showCustomTestDialog = true },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.padding(start = 8.dp).testTag("simulate_notification_button")
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .testTag("simulate_notification_button")
                 ) {
                     Icon(imageVector = Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Simular", style = MaterialTheme.typography.labelSmall)
+                    Text("Testar", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -166,7 +302,7 @@ fun ImportedNotificationsBottomSheet(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
+                            .height(240.dp)
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -181,16 +317,27 @@ fun ImportedNotificationsBottomSheet(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                text = "Tudo limpo por aqui!",
+                                text = "Nenhuma transação pendente",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Quando seus bancos enviarem notificações no celular, os valores e estabelecimentos aparecerão aqui para importação rápida.",
+                                text = "Quando o Nubank, Itaú, Inter, Bradesco ou outros emitirem notificações de compras ou Pix no seu celular, elas aparecerão aqui automaticamente para importação com 1 toque.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 24.dp)
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
+
+                            OutlinedButton(
+                                onClick = { showCustomTestDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Simular Notificação de Teste")
+                            }
                         }
                     }
                 } else {
@@ -202,7 +349,7 @@ fun ImportedNotificationsBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Toque em 'Importar' para adicionar ao extrato:",
+                            text = "Novas transações detectadas:",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -258,12 +405,15 @@ fun ImportedNotificationsBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Histórico de Leitura (${allNotifications.size}):",
+                            text = "Histórico de ${allNotifications.size} notificações:",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
                         TextButton(onClick = onClearHistory) {
-                            Text("Limpar Histórico")
+                            Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Limpar Histórico", color = MaterialTheme.colorScheme.error)
                         }
                     }
 
@@ -281,6 +431,116 @@ fun ImportedNotificationsBottomSheet(
             }
         }
     }
+
+    // Custom Test / Preset Dialog
+    if (showCustomTestDialog) {
+        var customBankPkg by remember { mutableStateOf("com.nu.production") }
+        var customBankName by remember { mutableStateOf("Nubank") }
+        var customNotificationText by remember {
+            mutableStateOf("Compra de R$ 89,90 aprovada no iFood com o cartão final 1234.")
+        }
+
+        AlertDialog(
+            onDismissRequest = { showCustomTestDialog = false },
+            title = {
+                Text(
+                    text = "Testar Leitor de Notificações",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Escolha um exemplo ou cole o texto exato da notificação que seu banco enviou:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Quick presets chips
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = customBankName == "Nubank",
+                                onClick = {
+                                    customBankPkg = "com.nu.production"
+                                    customBankName = "Nubank"
+                                    customNotificationText = "Compra de R$ 89,90 aprovada no iFood com o cartão final 1234."
+                                },
+                                label = { Text("Nubank") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = customBankName == "Itaú",
+                                onClick = {
+                                    customBankPkg = "com.itau"
+                                    customBankName = "Itaú"
+                                    customNotificationText = "Você recebeu um Pix de R$ 250,00 de Carlos Silva."
+                                },
+                                label = { Text("Itaú Pix") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = customBankName == "Banco Inter",
+                                onClick = {
+                                    customBankPkg = "br.com.intermedium"
+                                    customBankName = "Banco Inter"
+                                    customNotificationText = "Compra de R$ 149,90 aprovada em Amazon.com.br no cartão de crédito."
+                                },
+                                label = { Text("Inter") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = customBankName == "Bradesco",
+                                onClick = {
+                                    customBankPkg = "com.bradesco.cartoes"
+                                    customBankName = "Bradesco"
+                                    customNotificationText = "Compra aprovada no seu cartão final 5678, valor R$ 90,00 em Padaria."
+                                },
+                                label = { Text("Bradesco") }
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = customNotificationText,
+                        onValueChange = { customNotificationText = it },
+                        label = { Text("Texto da Notificação") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 90.dp),
+                        maxLines = 4,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSimulatePreset(customBankPkg, customBankName, customNotificationText)
+                        showCustomTestDialog = false
+                    }
+                ) {
+                    Icon(Icons.Default.Send, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Processar Teste")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomTestDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -290,32 +550,30 @@ private fun PendingNotificationCard(
     onConfirmImport: (merchant: String, amount: Double, category: String, cardId: Long?) -> Unit,
     onDiscard: () -> Unit
 ) {
-    var editableMerchant by remember(item.id) { mutableStateOf(item.merchant) }
-    var editableAmountStr by remember(item.id) { mutableStateOf(item.amount.toString().replace('.', ',')) }
-    var editableCategory by remember(item.id) { mutableStateOf(item.category) }
-    var selectedCardId by remember(item.id) { mutableStateOf<Long?>(item.matchedCardId) }
-    var isEditing by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
+    var editableMerchant by remember { mutableStateOf(item.merchant) }
+    var editableAmountStr by remember { mutableStateOf(String.format(Locale("pt", "BR"), "%.2f", item.amount)) }
+    var editableCategory by remember { mutableStateOf(item.category) }
+    var selectedCardId by remember { mutableStateOf<Long?>(item.matchedCardId) }
 
-    val isExpense = item.type == "EXPENSE"
     val formattedDate = remember(item.timestamp) {
-        SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(Date(item.timestamp))
+        SimpleDateFormat("dd/MM/yy HH:mm", Locale("pt", "BR")).format(Date(item.timestamp))
     }
+    val valAmount = NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(item.amount)
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("pending_notification_card_${item.id}"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Header Row (Bank Badge + Time + Discard)
+            // Top Row: Bank Badge & Discard button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -323,27 +581,30 @@ private fun PendingNotificationCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(100.dp),
-                        color = if (isExpense) ExpenseRed.copy(alpha = 0.12f) else IncomeGreen.copy(alpha = 0.12f)
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        Text(
+                            text = item.bankName,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    if (item.cardLastFourDigits != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                         ) {
-                            Icon(
-                                imageVector = if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                                contentDescription = null,
-                                tint = if (isExpense) ExpenseRed else IncomeGreen,
-                                modifier = Modifier.size(14.dp)
-                            )
                             Text(
-                                text = item.bankName,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (isExpense) ExpenseRed else IncomeGreen
+                                text = "Final ${item.cardLastFourDigits}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
                     }
@@ -351,28 +612,28 @@ private fun PendingNotificationCard(
                     Text(
                         text = formattedDate,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { isEditing = !isEditing },
+                        onClick = { isExpanded = !isExpanded },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
-                            contentDescription = "Editar",
-                            tint = MaterialTheme.colorScheme.primary,
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.Edit,
+                            contentDescription = "Editar detalhes",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(
                         onClick = onDiscard,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp).testTag("discard_button_${item.id}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Descartar",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(18.dp)
@@ -381,130 +642,116 @@ private fun PendingNotificationCard(
                 }
             }
 
-            // Body: Merchant & Value
-            if (!isEditing) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = editableMerchant,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "Categoria: $editableCategory",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    val valAmount = editableAmountStr.replace(',', '.').toDoubleOrNull() ?: item.amount
-                    val formattedVal = NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(valAmount)
-
+            // Middle Row: Merchant & Amount
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = formattedVal,
+                        text = editableMerchant,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (isExpense) ExpenseRed else IncomeGreen
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = editableCategory,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
-                // Editing Fields
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                Text(
+                    text = valAmount,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = if (item.type == "EXPENSE") ExpenseRed else IncomeGreen
+                )
+            }
+
+            // Expanded Edit Mode
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     OutlinedTextField(
                         value = editableMerchant,
                         onValueChange = { editableMerchant = it },
-                        label = { Text("Estabelecimento") },
-                        singleLine = true,
+                        label = { Text("Estabelecimento / Descrição") },
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                         shape = RoundedCornerShape(10.dp)
                     )
+
                     OutlinedTextField(
                         value = editableAmountStr,
                         onValueChange = { editableAmountStr = it },
                         label = { Text("Valor (R$)") },
-                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                         shape = RoundedCornerShape(10.dp)
                     )
-                }
-            }
 
-            // Card Selector if credit cards exist
-            if (isExpense && creditCards.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    item {
-                        FilterChip(
-                            selected = selectedCardId == null,
-                            onClick = { selectedCardId = null },
-                            label = { Text("Sem Cartão", style = MaterialTheme.typography.labelSmall) },
-                            leadingIcon = if (selectedCardId == null) {
-                                { Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }
-                            } else null
-                        )
+                    // Categories Selector
+                    Text(
+                        text = "Categoria:",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val catList = if (item.type == "EXPENSE") Categories.expenseCategories else Categories.incomeCategories
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(catList) { cat ->
+                            val isSel = editableCategory == cat.name
+                            FilterChip(
+                                selected = isSel,
+                                onClick = { editableCategory = cat.name },
+                                label = { Text(cat.name, style = MaterialTheme.typography.labelSmall) },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
                     }
 
-                    items(creditCards) { card ->
-                        val isSelected = selectedCardId == card.id
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedCardId = card.id },
-                            label = {
-                                Text(
-                                    text = card.name,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.CreditCard,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
+                    // Card selector
+                    if (item.type == "EXPENSE" && creditCards.isNotEmpty()) {
+                        Text(
+                            text = "Vincular a um Cartão de Crédito:",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = selectedCardId == null,
+                                    onClick = { selectedCardId = null },
+                                    label = { Text("Nenhum (Débito/Dinheiro)") },
+                                    shape = RoundedCornerShape(8.dp)
                                 )
                             }
-                        )
+                            items(creditCards) { card ->
+                                val isSel = selectedCardId == card.id
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = { selectedCardId = card.id },
+                                    label = { Text("${card.name} (•${card.lastFourDigits})") },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Quick Category Chips
-            val defaultCategories = if (isExpense) {
-                listOf("Alimentação", "Transporte", "Compras", "Lazer", "Contas & Fixas", "Saúde")
-            } else {
-                listOf("Salário", "Freelance / Extra", "Investimentos", "Outras Entradas")
-            }
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(defaultCategories) { cat ->
-                    val isSelected = editableCategory.equals(cat, ignoreCase = true)
-                    SuggestionChip(
-                        onClick = { editableCategory = cat },
-                        label = {
-                            Text(
-                                text = cat,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            )
-                        },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-                        ),
-                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
-                    )
-                }
-            }
-
-            // Raw Notification snippet
+            // Raw notification text preview
             Text(
                 text = "Texto original: \"${item.rawText.take(90)}${if (item.rawText.length > 90) "..." else ""}\"",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),

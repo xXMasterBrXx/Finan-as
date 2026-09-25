@@ -57,6 +57,63 @@ object NotificationManagerHelper {
     }
 
     /**
+     * Checks whether the special Notification Listener permission (to read bank notifications) is granted in Android.
+     */
+    fun isNotificationListenerPermissionGranted(context: Context): Boolean {
+        return try {
+            val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
+            if (enabledPackages.contains(context.packageName)) {
+                return true
+            }
+            val flat = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                "enabled_notification_listeners"
+            ) ?: ""
+            flat.contains(context.packageName)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Opens Android System Settings to allow the user to enable Notification Listener access for BUMoney.
+     */
+    fun openNotificationListenerSettings(context: Context) {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (err: Exception) {
+                err.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * Attempts to reconnect/rebind the BankNotificationListenerService if unhooked by the Android OS.
+     */
+    fun rebindNotificationListener(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                val componentName = android.content.ComponentName(
+                    context,
+                    com.example.service.BankNotificationListenerService::class.java
+                )
+                android.service.notification.NotificationListenerService.requestRebind(componentName)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
      * Dispatches an Android system notification.
      */
     fun showSystemNotification(
