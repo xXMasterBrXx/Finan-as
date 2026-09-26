@@ -379,6 +379,50 @@ class UserPreferences(context: Context) {
     )
     val biometricAuthEnabled: StateFlow<Boolean> = _biometricAuthEnabled.asStateFlow()
 
+    // Web PC Access Preferences
+    private val _webServerEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_WEB_SERVER_ENABLED, false)
+    )
+    val webServerEnabled: StateFlow<Boolean> = _webServerEnabled.asStateFlow()
+
+    private val _webServerPort = MutableStateFlow(
+        prefs.getInt(KEY_WEB_SERVER_PORT, 8080)
+    )
+    val webServerPort: StateFlow<Int> = _webServerPort.asStateFlow()
+
+    private val _webServerPin = MutableStateFlow(
+        prefs.getString(KEY_WEB_SERVER_PIN, null) ?: generateRandomPin().also {
+            prefs.edit().putString(KEY_WEB_SERVER_PIN, it).apply()
+        }
+    )
+    val webServerPin: StateFlow<String> = _webServerPin.asStateFlow()
+
+    fun setWebServerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_WEB_SERVER_ENABLED, enabled).apply()
+        _webServerEnabled.value = enabled
+    }
+
+    fun setWebServerPort(port: Int) {
+        prefs.edit().putInt(KEY_WEB_SERVER_PORT, port).apply()
+        _webServerPort.value = port
+    }
+
+    fun setWebServerPin(pin: String) {
+        val clean = pin.trim()
+        prefs.edit().putString(KEY_WEB_SERVER_PIN, clean).apply()
+        _webServerPin.value = clean
+    }
+
+    fun generateNewWebServerPin(): String {
+        val newPin = generateRandomPin()
+        setWebServerPin(newPin)
+        return newPin
+    }
+
+    private fun generateRandomPin(): String {
+        return (100000..999999).random().toString()
+    }
+
     fun isBiometricAuthEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_AUTH_ENABLED, false)
 
     fun setBiometricAuthEnabled(enabled: Boolean) {
@@ -681,6 +725,9 @@ class UserPreferences(context: Context) {
         private const val KEY_LAST_INSTALLED_VERSION_NAME = "key_last_installed_version_name"
         private const val KEY_LAST_INSTALLED_VERSION_CODE = "key_last_installed_version_code"
         private const val KEY_BIOMETRIC_AUTH_ENABLED = "key_biometric_auth_enabled"
+        private const val KEY_WEB_SERVER_ENABLED = "key_web_server_enabled"
+        private const val KEY_WEB_SERVER_PORT = "key_web_server_port"
+        private const val KEY_WEB_SERVER_PIN = "key_web_server_pin"
 
         @Volatile
         private var instance: UserPreferences? = null

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.LaptopMac
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -109,6 +110,7 @@ import com.example.ui.components.TransactionDialog
 import com.example.ui.components.TransactionItem
 import com.example.ui.components.TransactionList
 import com.example.ui.components.UpcomingScheduleCard
+import com.example.ui.components.WebAccessDialog
 import com.example.ui.viewmodel.FinanceViewModel
 import kotlinx.coroutines.launch
 
@@ -168,9 +170,15 @@ fun FinanceApp(
     val isNotificationListenerGranted by viewModel.isNotificationListenerGranted.collectAsStateWithLifecycle()
     val isNotificationListenerConnected by viewModel.isNotificationListenerConnected.collectAsStateWithLifecycle()
 
+    val isWebServerRunning by viewModel.isWebServerRunning.collectAsStateWithLifecycle()
+    val webServerUrl by viewModel.webServerUrl.collectAsStateWithLifecycle()
+    val webServerPin by viewModel.webServerPin.collectAsStateWithLifecycle()
+    val connectedWebClients by viewModel.connectedWebClientsCount.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Resumo, 1: Extrato, 2: Gráficos, 3: Cartões, 4: Ajustes
+    var showWebAccessDialog by remember { mutableStateOf(false) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
     var showImportedNotificationsSheet by remember { mutableStateOf(false) }
     var showBankImportSettingsSheet by remember { mutableStateOf(false) }
@@ -364,6 +372,16 @@ fun FinanceApp(
                                 imageVector = if (hideBalances) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                                 contentDescription = if (hideBalances) "Mostrar saldos" else "Ocultar saldos",
                                 tint = if (hideBalances) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = { showWebAccessDialog = true },
+                            modifier = Modifier.testTag("open_web_pc_access_icon")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LaptopMac,
+                                contentDescription = "Acesso Web PC",
+                                tint = if (isWebServerRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         P2PStatusBadge(
@@ -670,6 +688,10 @@ fun FinanceApp(
                             },
                             p2pSyncStatus = p2pSyncStatus,
                             onOpenP2PSync = { showP2PDialog = true },
+                            isWebServerRunning = isWebServerRunning,
+                            webServerUrl = webServerUrl,
+                            connectedWebClients = connectedWebClients,
+                            onOpenWebAccess = { showWebAccessDialog = true },
                             backupFiles = backupFiles,
                             backupInterval = backupInterval,
                             lastBackupTimestamp = lastBackupTimestamp,
@@ -959,6 +981,18 @@ fun FinanceApp(
             }
         )
     }
+
+    // Modal Dialog for Web PC Access
+    WebAccessDialog(
+        isOpen = showWebAccessDialog,
+        isServerRunning = isWebServerRunning,
+        serverUrl = webServerUrl,
+        serverPin = webServerPin,
+        connectedClients = connectedWebClients,
+        onToggleServer = { viewModel.setWebServerEnabled(it) },
+        onGenerateNewPin = { viewModel.generateNewWebPin() },
+        onDismissRequest = { showWebAccessDialog = false }
+    )
 
     // Modal Sheet for Notifications Center
     NotificationsSheet(

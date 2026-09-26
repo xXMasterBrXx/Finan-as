@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.LaptopMac
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CreditCardOff
@@ -157,6 +158,10 @@ fun SettingsScreen(
     onDeleteCategory: (Long) -> Unit = {},
     p2pSyncStatus: P2PSyncStatus? = null,
     onOpenP2PSync: () -> Unit = {},
+    isWebServerRunning: Boolean = false,
+    webServerUrl: String = "",
+    connectedWebClients: Int = 0,
+    onOpenWebAccess: () -> Unit = {},
     backupFiles: List<File> = emptyList(),
     backupInterval: String = "MANUAL",
     lastBackupTimestamp: Long = 0L,
@@ -381,6 +386,17 @@ fun SettingsScreen(
                     valueText = p2pStatusText,
                     onClick = onOpenP2PSync,
                     testTag = "settings_open_p2p_button"
+                )
+
+                SettingsRowDivider()
+
+                SettingsGroupRow(
+                    icon = Icons.Default.LaptopMac,
+                    title = "Acesso Web PC (Navegador)",
+                    subtitle = if (isWebServerRunning) "🟢 Ativo em $webServerUrl" else "Acesse no navegador do PC via Wi-Fi",
+                    valueText = if (isWebServerRunning) "ATIVO" else "CONFIGURAR",
+                    onClick = onOpenWebAccess,
+                    testTag = "settings_open_web_access_button"
                 )
 
                 SettingsRowDivider()

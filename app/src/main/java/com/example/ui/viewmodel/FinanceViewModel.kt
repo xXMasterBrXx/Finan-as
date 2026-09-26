@@ -232,6 +232,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     val p2pSyncStatus: StateFlow<com.example.data.p2p.P2PSyncStatus>
 
+    // Web PC Access (Desktop Browser P2P)
+    val webDesktopServer: com.example.data.webserver.WebDesktopServer
+    val isWebServerRunning: StateFlow<Boolean>
+    val webServerUrl: StateFlow<String>
+    val webServerPin: StateFlow<String> = userPreferences.webServerPin
+    val connectedWebClientsCount: StateFlow<Int>
+
     // All registered cards
     val creditCards: StateFlow<List<CreditCardEntity>>
 
@@ -331,6 +338,22 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         allIncomeCategories = customCategories.map { customList ->
             Categories.incomeCategories + customList.filter { it.type == TransactionType.INCOME }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Categories.incomeCategories)
+
+        webDesktopServer = com.example.data.webserver.WebDesktopServer(
+            context = application,
+            database = db,
+            repository = repository,
+            cardRepository = cardRepository,
+            categoryRepository = categoryRepository,
+            userPreferences = userPreferences
+        )
+        isWebServerRunning = webDesktopServer.isRunning
+        webServerUrl = webDesktopServer.serverUrl
+        connectedWebClientsCount = webDesktopServer.connectedClientsCount
+
+        if (userPreferences.webServerEnabled.value) {
+            webDesktopServer.startServer(userPreferences.webServerPort.value)
+        }
 
         viewModelScope.launch {
             checkAndRecoverAfterUpdate()
@@ -1545,5 +1568,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val count = com.example.service.BankNotificationListenerService.scanActiveNotifications()
         refreshNotificationListenerStatus()
         return count
+    }
+
+    // Web PC Access (Desktop Browser P2P)
+    fun setWebServerEnabled(enabled: Boolean) {
+        userPreferences.setWebServerEnabled(enabled)
+        if (enabled) {
+            webDesktopServer.startServer(userPreferences.webServerPort.value)
+        } else {
+            webDesktopServer.stopServer()
+        }
+    }
+
+    fun generateNewWebPin(): String {
+        return userPreferences.generateNewWebServerPin()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        webDesktopServer.stopServer()
     }
 }
