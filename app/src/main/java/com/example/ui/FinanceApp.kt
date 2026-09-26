@@ -39,18 +39,23 @@ import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.LaptopMac
 import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,7 +94,9 @@ import com.example.data.local.CreditCardEntity
 import com.example.data.local.TransactionEntity
 import com.example.data.model.CategoryItem
 import com.example.data.model.TransactionType
+import com.example.data.p2p.P2PConnectionState
 import com.example.data.preferences.AppThemeColor
+import com.example.ui.theme.IncomeGreen
 import com.example.ui.components.AnticipateInstallmentsDialog
 import com.example.ui.components.BankImportSettingsSheet
 import com.example.ui.components.CardDialog
@@ -223,6 +230,7 @@ fun FinanceApp(
     var showCategoryDialog by remember { mutableStateOf(false) }
     var categoryDialogType by remember { mutableStateOf(TransactionType.EXPENSE) }
     var categoryToEdit by remember { mutableStateOf<CategoryItem?>(null) }
+    var showTopOverflowMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -263,132 +271,262 @@ fun FinanceApp(
                             )
                         }
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    selectedTab = 4
+                                }
+                                .testTag("top_settings_button")
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        selectedTab = 4
-                                    }
-                                    .testTag("top_settings_button")
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Wallet,
                                         contentDescription = "Acessar Configurações",
                                         tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "BUMoney",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 19.sp,
                                     letterSpacing = 0.2.sp
                                 ),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.clickable {
-                                    selectedTab = 4
-                                }
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 },
                 actions = {
                     if (selectedTab != 4) {
-                        IconButton(
-                            onClick = {
-                                viewModel.refreshNotificationListenerStatus()
-                                showImportedNotificationsSheet = true
-                            },
-                            modifier = Modifier.testTag("bank_import_bell_icon")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(1.dp),
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
-                            BadgedBox(
-                                badge = {
-                                    if (pendingImportedCount > 0) {
-                                        Badge(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        ) {
-                                            Text(
-                                                text = if (pendingImportedCount > 99) "99+" else pendingImportedCount.toString(),
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold
+                            // 1. Central de Notificações
+                            IconButton(
+                                onClick = { showNotificationsSheet = true },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("notifications_bell_icon")
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadNotificationCount > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError
+                                            ) {
+                                                Text(
+                                                    text = if (unreadNotificationCount > 99) "99+" else unreadNotificationCount.toString(),
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
                                                 )
-                                            )
+                                            }
                                         }
                                     }
+                                ) {
+                                    Icon(
+                                        imageVector = if (unreadNotificationCount > 0) Icons.Filled.NotificationsActive else Icons.Filled.Notifications,
+                                        contentDescription = "Central de Notificações",
+                                        tint = if (unreadNotificationCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Receipt,
-                                    contentDescription = "Importador de Notificações Bancárias",
-                                    tint = if (pendingImportedCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
-                        }
 
-                        IconButton(
-                            onClick = { showNotificationsSheet = true },
-                            modifier = Modifier.testTag("notifications_bell_icon")
-                        ) {
-                            BadgedBox(
-                                badge = {
-                                    if (unreadNotificationCount > 0) {
-                                        Badge(
-                                            containerColor = MaterialTheme.colorScheme.error,
-                                            contentColor = MaterialTheme.colorScheme.onError
-                                        ) {
-                                            Text(
-                                                text = if (unreadNotificationCount > 99) "99+" else unreadNotificationCount.toString(),
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
+                            // 2. Alternar Privacidade (Ocultar/Exibir Saldos)
+                            IconButton(
+                                onClick = { viewModel.setHideBalances(!hideBalances) },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("toggle_privacy_icon")
                             ) {
                                 Icon(
-                                    imageVector = if (unreadNotificationCount > 0) Icons.Filled.NotificationsActive else Icons.Filled.Notifications,
-                                    contentDescription = "Central de Notificações",
-                                    tint = if (unreadNotificationCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    imageVector = if (hideBalances) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (hideBalances) "Mostrar saldos" else "Ocultar saldos",
+                                    tint = if (hideBalances) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
+
+                            // 3. Importador Bancário (SMS / Notificações)
+                            IconButton(
+                                onClick = {
+                                    viewModel.refreshNotificationListenerStatus()
+                                    showImportedNotificationsSheet = true
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("bank_import_bell_icon")
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (pendingImportedCount > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ) {
+                                                Text(
+                                                    text = if (pendingImportedCount > 9) "9+" else pendingImportedCount.toString(),
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Receipt,
+                                        contentDescription = "Importador Bancário",
+                                        tint = if (pendingImportedCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            // 4. Mais Opções (Menu suspenso com Sincronização P2P e Acesso Web PC)
+                            Box {
+                                val hasSyncActivity = p2pSyncStatus.state == P2PConnectionState.CONNECTED ||
+                                    p2pSyncStatus.state == P2PConnectionState.SYNCING ||
+                                    p2pSyncStatus.state == P2PConnectionState.SEARCHING
+                                val hasBackgroundActive = isWebServerRunning || hasSyncActivity
+
+                                IconButton(
+                                    onClick = { showTopOverflowMenu = true },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("top_more_options_button")
+                                ) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (hasBackgroundActive) {
+                                                val dotColor = if (isWebServerRunning || p2pSyncStatus.state == P2PConnectionState.CONNECTED) IncomeGreen else Color(0xFFFFB300)
+                                                Badge(
+                                                    containerColor = dotColor,
+                                                    modifier = Modifier.size(6.dp)
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MoreVert,
+                                            contentDescription = "Mais opções",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = showTopOverflowMenu,
+                                    onDismissRequest = { showTopOverflowMenu = false },
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    // Sincronização P2P
+                                    val (p2pColor, p2pLabel) = when {
+                                        !p2pSyncStatus.isEnabled -> Pair(Color.Gray, "Desativado")
+                                        p2pSyncStatus.state == P2PConnectionState.CONNECTED -> Pair(IncomeGreen, "Conectado (${p2pSyncStatus.connectedPeers.size})")
+                                        p2pSyncStatus.state == P2PConnectionState.SYNCING -> Pair(MaterialTheme.colorScheme.primary, "Sincronizando...")
+                                        p2pSyncStatus.state == P2PConnectionState.SEARCHING -> Pair(Color(0xFFFFB300), "Buscando aparelhos")
+                                        p2pSyncStatus.state == P2PConnectionState.ERROR -> Pair(Color(0xFFE53935), "Erro na conexão")
+                                        else -> Pair(Color.Gray, "Disponível")
+                                    }
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = "Sincronização P2P",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                                )
+                                                Text(
+                                                    text = p2pLabel,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = p2pColor
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Sync,
+                                                contentDescription = "Sincronização P2P",
+                                                tint = p2pColor
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(9.dp)
+                                                    .clip(CircleShape)
+                                                    .background(p2pColor)
+                                            )
+                                        },
+                                        onClick = {
+                                            showTopOverflowMenu = false
+                                            showP2PDialog = true
+                                        },
+                                        modifier = Modifier.testTag("p2p_status_badge")
+                                    )
+
+                                    // Acesso Web PC
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = "Acesso Web PC",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                                )
+                                                Text(
+                                                    text = if (isWebServerRunning) "Servidor ativo na rede local" else "Abrir navegador no computador",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isWebServerRunning) IncomeGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.LaptopMac,
+                                                contentDescription = "Acesso Web PC",
+                                                tint = if (isWebServerRunning) IncomeGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            if (isWebServerRunning) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(9.dp)
+                                                        .clip(CircleShape)
+                                                        .background(IncomeGreen)
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            showTopOverflowMenu = false
+                                            showWebAccessDialog = true
+                                        },
+                                        modifier = Modifier.testTag("open_web_pc_access_icon")
+                                    )
+                                }
+                            }
                         }
-                        IconButton(
-                            onClick = { viewModel.setHideBalances(!hideBalances) },
-                            modifier = Modifier.testTag("toggle_privacy_icon")
-                        ) {
-                            Icon(
-                                imageVector = if (hideBalances) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                contentDescription = if (hideBalances) "Mostrar saldos" else "Ocultar saldos",
-                                tint = if (hideBalances) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = { showWebAccessDialog = true },
-                            modifier = Modifier.testTag("open_web_pc_access_icon")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LaptopMac,
-                                contentDescription = "Acesso Web PC",
-                                tint = if (isWebServerRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        P2PStatusBadge(
-                            status = p2pSyncStatus,
-                            onClick = { showP2PDialog = true },
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
