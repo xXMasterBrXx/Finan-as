@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,11 +39,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.theme.EmeraldPrimary
 
 @Composable
@@ -84,26 +88,37 @@ fun BiometricLockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Security Icon Shield & Lock
+            // Security Icon Shield & App Logo
             Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(EmeraldPrimary.copy(alpha = 0.15f)),
+                modifier = Modifier.size(92.dp),
                 contentAlignment = Alignment.Center
             ) {
+                Surface(
+                    modifier = Modifier.size(80.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color.Black,
+                    shadowElevation = 8.dp
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_app_logo),
+                        contentDescription = "Logo BUMoney",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 Box(
                     modifier = Modifier
-                        .size(76.dp)
+                        .size(30.dp)
+                        .align(Alignment.BottomEnd)
                         .clip(CircleShape)
-                        .background(EmeraldPrimary.copy(alpha = 0.25f)),
+                        .background(EmeraldPrimary),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Aplicativo Bloqueado",
-                        tint = EmeraldPrimary,
-                        modifier = Modifier.size(40.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

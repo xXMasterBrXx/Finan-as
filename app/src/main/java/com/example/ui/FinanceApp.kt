@@ -1,6 +1,10 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -282,17 +286,15 @@ fun FinanceApp(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.primary,
+                                color = Color.Black,
                                 modifier = Modifier.size(34.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Wallet,
-                                        contentDescription = "Acessar Configurações",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Image(
+                                    painter = painterResource(id = R.drawable.img_app_logo),
+                                    contentDescription = "Logo BUMoney",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
