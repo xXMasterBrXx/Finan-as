@@ -842,7 +842,7 @@ object WebDesktopAppHtml {
       <section id="view-dashboard">
         <div class="metrics-grid">
           <div class="metric-card balance">
-            <span class="metric-label">Saldo Acumulado</span>
+            <span class="metric-label">Saldo Total Disponível</span>
             <span id="metricBalance" class="metric-value">R$ 0,00</span>
             <span id="metricBalanceSub" class="metric-sub">Balanço geral</span>
           </div>
@@ -1307,14 +1307,14 @@ object WebDesktopAppHtml {
         </label>
         <div id="txRecurringInputs" style="display: none; align-items: center; gap: 8px; margin-top: 4px;">
           <span style="font-size: 12px; color: var(--text-muted);">Repetir por:</span>
-          <select id="txRecurringMonths" class="form-select" style="width: 180px;">
-            <option value="always" selected>Sempre (fixo todo mês)</option>
+          <select id="txRecurringMonths" class="form-select" style="width: 190px;">
+            <option value="always" selected>Sempre (recorrente contínuo)</option>
             <option value="3">3 meses</option>
             <option value="6">6 meses</option>
-            <option value="12">12 meses</option>
-            <option value="24">24 meses</option>
-            <option value="36">36 meses</option>
-            <option value="60">60 meses</option>
+            <option value="12">12 meses (1 ano)</option>
+            <option value="24">24 meses (2 anos)</option>
+            <option value="36">36 meses (3 anos)</option>
+            <option value="60">60 meses (5 anos)</option>
           </select>
         </div>
       </div>
@@ -1656,23 +1656,72 @@ object WebDesktopAppHtml {
         }
       });
 
-      // Saldo acumulado considerar até o mês que eu filtro;
-      let totalBalance = 0;
+      // Saldo Total Disponível acumulado (mesma regra e cálculo exato do app mobile)
+      const startEpoch = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0).getTime();
+      const endEpoch = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999).getTime();
+
+      const cardMap = {};
+      (allData.cards || []).forEach(c => { cardMap[c.id] = c; });
+
+      // 1. Saldo Anterior Acumulado de meses anteriores
+      let historicalIncomeBefore = 0;
+      let historicalOutflowBefore = 0;
       txs.forEach(t => {
-        const d = new Date(t.timestamp);
-        const y = d.getFullYear();
-        const m = d.getMonth();
-        if (y < currentYear || (y === currentYear && m <= currentMonth)) {
-          if (t.type === "INCOME") totalBalance += t.amount;
-          else totalBalance -= t.amount;
+        if (t.type === "INCOME") {
+          if (t.timestamp < startEpoch) {
+            historicalIncomeBefore += t.amount;
+          }
+        } else {
+          const card = t.cardId ? cardMap[t.cardId] : null;
+          if (card) {
+            const due = calculateCardPaymentMonthAndYear(t.timestamp, card);
+            if (due && (due.year < currentYear || (due.year === currentYear && due.month < currentMonth))) {
+              historicalOutflowBefore += t.amount;
+            }
+          } else {
+            if (t.timestamp < startEpoch) {
+              historicalOutflowBefore += t.amount;
+            }
+          }
         }
       });
+      const previousBalance = historicalIncomeBefore - historicalOutflowBefore;
+
+      // 2. Receitas deste mês
+      let incomeSum = 0;
+      monthTxs.forEach(t => {
+        if (t.type === "INCOME") {
+          incomeSum += t.amount;
+        }
+      });
+
+      // 3. Saídas de fato neste mês (Caixa Real: sem cartão neste mês ou cartão cuja fatura vence neste mês)
+      let cashOutflowThisMonth = 0;
+      txs.forEach(t => {
+        if (t.type !== "EXPENSE") return;
+        const card = t.cardId ? cardMap[t.cardId] : null;
+        if (card) {
+          const due = calculateCardPaymentMonthAndYear(t.timestamp, card);
+          if (due && due.year === currentYear && due.month === currentMonth) {
+            cashOutflowThisMonth += t.amount;
+          }
+        } else {
+          if (t.timestamp >= startEpoch && t.timestamp <= endEpoch) {
+            cashOutflowThisMonth += t.amount;
+          }
+        }
+      });
+
+      const monthBalance = incomeSum - cashOutflowThisMonth;
+      const accumulatedBalance = previousBalance + monthBalance;
 
       const savings = income - expense;
       const savingsRate = income > 0 ? Math.round((savings / income) * 100) : 0;
 
-      document.getElementById("metricBalance").textContent = formatBRL(totalBalance);
-      document.getElementById("metricBalanceSub").textContent = "Até " + MONTH_NAMES[currentMonth] + " " + currentYear;
+      document.getElementById("metricBalance").textContent = formatBRL(accumulatedBalance);
+      document.getElementById("metricBalance").style.color = accumulatedBalance >= 0 ? "var(--income)" : "var(--expense)";
+      document.getElementById("metricBalanceSub").textContent =
+        `Anterior: ${'$'}{formatBRL(previousBalance)} • Deste Mês: ${'$'}{monthBalance >= 0 ? '+' : ''}${'$'}{formatBRL(monthBalance)}`;
       document.getElementById("metricIncome").textContent = formatBRL(income);
       document.getElementById("metricIncomeCount").textContent = `${'$'}{incomeCount} receitas`;
       document.getElementById("metricExpense").textContent = formatBRL(expense);
@@ -2667,6 +2716,40 @@ object WebDesktopAppHtml {
     }
 
     // HELPERS
+    function calculateCardPaymentMonthAndYear(purchaseTimestamp, card) {
+      if (!card) return null;
+      const d = new Date(purchaseTimestamp);
+      const txYear = d.getFullYear();
+      const txMonth = d.getMonth(); // 0-based
+      const txDay = d.getDate();
+
+      const closingDay = Math.min(Math.max(card.closingDay || 1, 1), 31);
+      const dueDay = Math.min(Math.max(card.dueDay || 1, 1), 31);
+
+      let dueYear = txYear;
+      let dueMonth = txMonth;
+
+      if (closingDay <= dueDay) {
+        if (txDay <= closingDay) {
+          return { year: txYear, month: txMonth };
+        } else {
+          dueMonth += 1;
+        }
+      } else {
+        if (txDay <= closingDay) {
+          dueMonth += 1;
+        } else {
+          dueMonth += 2;
+        }
+      }
+
+      if (dueMonth >= 12) {
+        dueYear += Math.floor(dueMonth / 12);
+        dueMonth = dueMonth % 12;
+      }
+      return { year: dueYear, month: dueMonth };
+    }
+
     function formatBRL(val) {
       return (val || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     }
