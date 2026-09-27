@@ -27,6 +27,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.io.PrintWriter
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -270,6 +271,34 @@ class WebDesktopServer(
                     socket.close()
                 }
 
+                // App Logo API (serves user uploaded logo)
+                (method == "GET" && (path == "/api/logo" || path == "/logo.png" || path == "/favicon.ico")) -> {
+                    val logoBytes = try {
+                        context.resources.openRawResource(com.example.R.drawable.img_app_logo).use { it.readBytes() }
+                    } catch (e: Exception) {
+                        try {
+                            context.resources.openRawResource(com.example.R.drawable.img_app_icon).use { it.readBytes() }
+                        } catch (e2: Exception) {
+                            null
+                        }
+                    }
+
+                    if (logoBytes != null && logoBytes.isNotEmpty()) {
+                        val header = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: image/png\r\n" +
+                            "Access-Control-Allow-Origin: *\r\n" +
+                            "Cache-Control: public, max-age=86400\r\n" +
+                            "Content-Length: ${logoBytes.size}\r\n\r\n"
+                        outputStream.write(header.toByteArray(Charsets.UTF_8))
+                        outputStream.write(logoBytes)
+                        outputStream.flush()
+                    } else {
+                        sendResponse(writer, 404, "Not Found", "text/plain", "Logo não encontrado")
+                    }
+                    socket.close()
+                    return@withContext
+                }
+
                 // Public Status API
                 (method == "GET" && path == "/api/status") -> {
                     val res = JSONObject().apply {
@@ -423,6 +452,91 @@ class WebDesktopServer(
                     val newId = cardRepository.insert(card)
                     sendResponse(writer, 200, "OK", "application/json", "{\"success\":true,\"id\":$newId}")
                     broadcastUpdate("CARD_CREATED")
+                    socket.close()
+                }
+
+                // Add Category
+                (method == "POST" && path == "/api/categories") -> {
+                    val token = queryParams["token"] ?: authHeader.removePrefix("Bearer ").trim()
+                    if (!isAuthorized(token, queryParams["pin"])) {
+                        sendResponse(writer, 401, "Unauthorized", "application/json", "{\"error\":\"Unauthorized\"}")
+                        socket.close()
+                        return@withContext
+                    }
+
+                    val json = JSONObject(body)
+                    val name = json.optString("name", "").trim()
+                    val typeStr = json.optString("type", "EXPENSE")
+                    val type = if (typeStr == "INCOME") TransactionType.INCOME else TransactionType.EXPENSE
+                    val colorHex = json.optString("colorHex", "#10B981")
+                    val iconName = json.optString("iconName", "Category")
+
+                    if (name.isNotEmpty()) {
+                        val newId = categoryRepository.addCategory(name, type, iconName, colorHex)
+                        sendResponse(writer, 200, "OK", "application/json", "{\"success\":true,\"id\":$newId}")
+                        broadcastUpdate("CATEGORY_CREATED")
+                    } else {
+                        sendResponse(writer, 400, "Bad Request", "application/json", "{\"error\":\"Nome da categoria é obrigatório\"}")
+                    }
+                    socket.close()
+                }
+
+                // Update Category
+                (method == "PUT" && path.startsWith("/api/categories/")) -> {
+                    val token = queryParams["token"] ?: authHeader.removePrefix("Bearer ").trim()
+                    if (!isAuthorized(token, queryParams["pin"])) {
+                        sendResponse(writer, 401, "Unauthorized", "application/json", "{\"error\":\"Unauthorized\"}")
+                        socket.close()
+                        return@withContext
+                    }
+
+                    val id = path.removePrefix("/api/categories/").toLongOrNull()
+                    if (id != null) {
+                        val json = JSONObject(body)
+                        val name = json.optString("name", "").trim()
+                        val typeStr = json.optString("type", "EXPENSE")
+                        val type = if (typeStr == "INCOME") TransactionType.INCOME else TransactionType.EXPENSE
+                        val colorHex = json.optString("colorHex", "#10B981")
+                        val iconName = json.optString("iconName", "Category")
+                        val oldName = json.optString("oldName", "").trim()
+
+                        if (id > 0) {
+                            categoryRepository.updateCategory(id, name, type, iconName, colorHex)
+                        } else {
+                            // User edited a default system category -> convert to custom category
+                            categoryRepository.addCategory(name, type, iconName, colorHex)
+                        }
+
+                        // Update past transactions if name changed
+                        if (oldName.isNotEmpty() && oldName != name && json.optBoolean("renameInTransactions", true)) {
+                            database.transactionDao().updateCategoryName(oldName, name, type.name)
+                        }
+
+                        sendResponse(writer, 200, "OK", "application/json", "{\"success\":true}")
+                        broadcastUpdate("CATEGORY_UPDATED")
+                    } else {
+                        sendResponse(writer, 400, "Bad Request", "application/json", "{\"error\":\"ID inválido\"}")
+                    }
+                    socket.close()
+                }
+
+                // Delete Category
+                (method == "DELETE" && path.startsWith("/api/categories/")) -> {
+                    val token = queryParams["token"] ?: authHeader.removePrefix("Bearer ").trim()
+                    if (!isAuthorized(token, queryParams["pin"])) {
+                        sendResponse(writer, 401, "Unauthorized", "application/json", "{\"error\":\"Unauthorized\"}")
+                        socket.close()
+                        return@withContext
+                    }
+
+                    val id = path.removePrefix("/api/categories/").toLongOrNull()
+                    if (id != null && id > 0) {
+                        categoryRepository.deleteCategory(id)
+                        sendResponse(writer, 200, "OK", "application/json", "{\"success\":true}")
+                        broadcastUpdate("CATEGORY_DELETED")
+                    } else {
+                        sendResponse(writer, 400, "Bad Request", "application/json", "{\"error\":\"Não é possível excluir categoria padrão\"}")
+                    }
                     socket.close()
                 }
 
@@ -601,7 +715,12 @@ class WebDesktopServer(
             )
             res.put("success", true)
             res.put("message", "Lançamento parcelado em ${totalInstallments}x criado com sucesso.")
-        } else if (isRecurring && recurringMonths > 1) {
+        } else if (isRecurring) {
+            val isAlways = json.optBoolean("isAlways", false) ||
+                json.optBoolean("isIndefinite", false) ||
+                json.optString("recurringPeriod") == "always" ||
+                recurringMonths <= 0
+            val count = if (isAlways) 60 else recurringMonths.coerceAtLeast(2)
             repository.createRecurring(
                 title = title,
                 amount = amount,
@@ -610,12 +729,12 @@ class WebDesktopServer(
                 startTimestamp = timestamp,
                 note = note,
                 cardId = cardId,
-                monthsCount = recurringMonths,
+                monthsCount = count,
                 intervalMonths = 1,
-                isIndefinite = false
+                isIndefinite = isAlways
             )
             res.put("success", true)
-            res.put("message", "Lançamento recorrente criado com sucesso.")
+            res.put("message", if (isAlways) "Gasto recorrente sempre (contínuo) criado com sucesso." else "Lançamento recorrente criado com sucesso.")
         } else {
             val entity = TransactionEntity(
                 title = title,

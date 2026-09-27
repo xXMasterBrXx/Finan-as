@@ -9,7 +9,8 @@ object WebDesktopAppHtml {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BUMoney Desktop • Painel Financeiro PC</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310B981'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2V7h2v5.5z'/></svg>">
+  <link rel="icon" type="image/png" href="/api/logo">
+  <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310B981'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2V7h2v5.5z'/></svg>">
   <style>
     :root {
       --bg-base: #0B0F19;
@@ -694,6 +695,62 @@ object WebDesktopAppHtml {
       font-size: 13px;
       font-weight: 500;
     }
+    .brand-logo-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      object-fit: cover;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      flex-shrink: 0;
+    }
+    .ana-bar {
+      transition: height 0.3s ease, background 0.2s ease;
+      cursor: pointer;
+    }
+    .ana-bar:hover {
+      filter: brightness(1.2);
+    }
+    .rank-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--bg-hover);
+      color: var(--text-muted);
+    }
+    .rank-num.top1 { background: #F59E0B; color: #000; }
+    .rank-num.top2 { background: #94A3B8; color: #000; }
+    .rank-num.top3 { background: #D97706; color: #fff; }
+    @media print {
+      aside, header .header-right, .month-nav button, .table-toolbar button, .shortcuts-hint {
+        display: none !important;
+      }
+      body {
+        background: #fff !important;
+        color: #000 !important;
+        overflow: visible !important;
+        height: auto !important;
+      }
+      main {
+        overflow: visible !important;
+        height: auto !important;
+        padding: 0 !important;
+      }
+      .content-area {
+        overflow: visible !important;
+      }
+      .chart-card, .table-container, .metric-card {
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        background: #fff !important;
+        color: #000 !important;
+      }
+    }
     @keyframes slideIn {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
@@ -705,8 +762,12 @@ object WebDesktopAppHtml {
   <!-- SIDEBAR -->
   <aside>
     <div class="brand">
-      <div class="brand-icon">B</div>
-      <div class="brand-title">BUMoney PC</div>
+      <img src="/api/logo" alt="Logo BUMoney" class="brand-logo-img" onerror="this.style.display='none'; document.getElementById('brandIconFallback').style.display='flex';">
+      <div id="brandIconFallback" class="brand-icon" style="display: none;">$</div>
+      <div style="display: flex; flex-direction: column; overflow: hidden;">
+        <div class="brand-title">BUMoney</div>
+        <span style="font-size: 10px; color: var(--text-dim); line-height: 1;">Painel PC Web</span>
+      </div>
       <div class="brand-badge">P2P</div>
     </div>
 
@@ -719,6 +780,10 @@ object WebDesktopAppHtml {
       <a class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
         <span>Visão Geral</span>
+      </a>
+      <a class="nav-item" data-view="analytics" onclick="switchView('analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <span>Análises & Gráficos</span>
       </a>
       <a class="nav-item" data-view="transactions" onclick="switchView('transactions')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -847,6 +912,181 @@ object WebDesktopAppHtml {
         </div>
       </section>
 
+      <!-- VIEW: ANALYTICS -->
+      <section id="view-analytics" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <h2 style="font-size: 20px; font-weight: 700; color: var(--text-main);">Análises Detalhadas de Gastos</h2>
+            <p style="color: var(--text-dim); font-size: 13px;">Visão analítica completa, projeções, padrões diários e fatias de orçamento</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <select id="analyticsPeriodSelect" class="filter-select" onchange="renderAnalytics()">
+              <option value="CURRENT_MONTH" selected>Mês Selecionado (no topo)</option>
+              <option value="LAST_3_MONTHS">Últimos 3 Meses</option>
+              <option value="LAST_6_MONTHS">Últimos 6 Meses</option>
+              <option value="CURRENT_YEAR">Ano Atual Completo</option>
+              <option value="ALL_TIME">Todo o Histórico</option>
+            </select>
+            <button class="btn btn-secondary" onclick="window.print()" title="Imprimir ou exportar relatório em PDF">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              <span>Imprimir Relatório</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Analytical KPI Grid -->
+        <div class="metrics-grid" style="margin-bottom: 24px;">
+          <div class="metric-card">
+            <span class="metric-label">Média de Gasto Diário</span>
+            <span id="anaDailyAvg" class="metric-value">R$ 0,00</span>
+            <span id="anaDailyAvgSub" class="metric-sub">Baseado nos dias corridos</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Projeção Fim do Mês</span>
+            <span id="anaProjectedTotal" class="metric-value expense">R$ 0,00</span>
+            <span id="anaProjectedSub" class="metric-sub">Ritmo atual de despesas</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Comprometimento de Renda</span>
+            <span id="anaCommitmentRate" class="metric-value">0%</span>
+            <span id="anaCommitmentSub" class="metric-sub">Gastos / Receitas</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Maior Gasto Único</span>
+            <span id="anaTopExpenseAmount" class="metric-value expense">R$ 0,00</span>
+            <span id="anaTopExpenseTitle" class="metric-sub">Nenhum gasto</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Dias Sem Gastos</span>
+            <span id="anaZeroSpendDays" class="metric-value income">0 dias</span>
+            <span id="anaZeroSpendSub" class="metric-sub">Dias 100% econômicos</span>
+          </div>
+        </div>
+
+        <!-- Row 1: Daily Timeline & Fixed vs Variable Structure -->
+        <div class="charts-row" style="margin-bottom: 24px;">
+          <div class="chart-card" style="flex: 1.6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <div class="chart-title">Distribuição Diária de Gastos (Dia 1 a 31)</div>
+                <div style="font-size: 12px; color: var(--text-dim);">Passe o mouse sobre as barras para ver os detalhes do dia</div>
+              </div>
+              <div id="anaDailyPeakDay" style="font-size: 11px; padding: 4px 8px; border-radius: 4px; background: var(--expense-light); color: var(--expense); font-weight: 600;">
+                Pico: Dia -
+              </div>
+            </div>
+            <div id="anaDailyChartContainer" style="height: 190px; display: flex; align-items: flex-end; gap: 4px; padding-top: 20px; border-bottom: 1px solid var(--border-color);">
+              <!-- Rendered dynamically -->
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); margin-top: 6px;">
+              <span>Dia 1</span><span>Dia 5</span><span>Dia 10</span><span>Dia 15</span><span>Dia 20</span><span>Dia 25</span><span>Dia 31</span>
+            </div>
+          </div>
+
+          <div class="chart-card" style="flex: 1;">
+            <div class="chart-title">Estrutura e Flexibilidade dos Gastos</div>
+            <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 16px;">Grau de rigidez das despesas no período</div>
+            <div id="anaStructureBars" style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Dynamic bars -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Category Donut & Detailed Ranking Table -->
+        <div class="charts-row" style="margin-bottom: 24px;">
+          <div class="chart-card" style="flex: 1;">
+            <div class="chart-title">Fatias por Categoria (Gráfico Donut)</div>
+            <div style="display: flex; align-items: center; justify-content: center; position: relative; height: 230px;">
+              <svg id="anaDonutSvg" width="210" height="210" viewBox="0 0 100 100">
+                <!-- SVG Circle Paths -->
+              </svg>
+              <div id="anaDonutCenterText" style="position: absolute; text-align: center; pointer-events: none;">
+                <div style="font-size: 11px; color: var(--text-dim);">Total Despesas</div>
+                <div id="anaDonutTotalLabel" style="font-size: 16px; font-weight: 700; color: var(--text-main);">R$ 0,00</div>
+              </div>
+            </div>
+            <div id="anaDonutLegend" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; font-size: 12px;">
+              <!-- Legend items -->
+            </div>
+          </div>
+
+          <div class="chart-card" style="flex: 1.4;">
+            <div class="chart-title">Detalhamento Completo por Categoria</div>
+            <div class="table-container" style="max-height: 290px; overflow-y: auto; margin-top: 10px; border: none;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>Qtd</th>
+                    <th>Ticket Médio</th>
+                    <th>Total Gasto</th>
+                    <th style="text-align: right;">% da Despesa</th>
+                  </tr>
+                </thead>
+                <tbody id="anaCategoryRankingTable">
+                  <!-- Rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Payment Method & Top 10 Largest Purchases -->
+        <div class="charts-row" style="margin-bottom: 24px;">
+          <div class="chart-card" style="flex: 1;">
+            <div class="chart-title">Gastos por Cartão & Forma de Pagamento</div>
+            <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 16px;">Onde seu dinheiro está saindo</div>
+            <div id="anaPaymentMethodList" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Payment methods list -->
+            </div>
+          </div>
+
+          <div class="chart-card" style="flex: 1.4;">
+            <div class="chart-title">Top 10 Maiores Gastos do Período</div>
+            <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">Lançamentos de maior peso individual</div>
+            <div class="table-container" style="max-height: 250px; overflow-y: auto; border: none;">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 36px;">#</th>
+                    <th>Título</th>
+                    <th>Categoria</th>
+                    <th>Data</th>
+                    <th>Valor</th>
+                    <th style="text-align: right;">% do Total</th>
+                  </tr>
+                </thead>
+                <tbody id="anaTopExpensesTable">
+                  <!-- Rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: 6-Month Comparison Table -->
+        <div class="chart-card" style="margin-bottom: 24px;">
+          <div class="chart-title">Evolução Histórica Semestral Detalhada (Últimos 6 Meses)</div>
+          <div class="table-container" style="margin-top: 12px; border: none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mês / Ano</th>
+                  <th>Receitas</th>
+                  <th>Despesas</th>
+                  <th>Resultado (Líquido)</th>
+                  <th>Taxa de Poupança</th>
+                  <th>Tendência de Gasto</th>
+                </tr>
+              </thead>
+              <tbody id="anaHistoricalTable">
+                <!-- Rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW: TRANSACTIONS -->
       <section id="view-transactions" style="display: none;">
         <div class="table-container">
@@ -922,20 +1162,25 @@ object WebDesktopAppHtml {
       <section id="view-categories" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <div>
-            <h2 style="font-size: 18px; font-weight: 700;">Categorias Personalizadas</h2>
-            <p style="color: var(--text-dim); font-size: 13px;">Organize suas finanças com categorias próprias</p>
+            <h2 style="font-size: 18px; font-weight: 700;">Categorias Personalizadas & Sistema</h2>
+            <p style="color: var(--text-dim); font-size: 13px;">Organize suas finanças editando categorias, cores, ícones e nomes</p>
           </div>
-          <button class="btn btn-primary" onclick="openCategoryModal()">+ Nova Categoria</button>
+          <button class="btn btn-primary" onclick="openCategoryModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>+ Nova Categoria</span>
+          </button>
         </div>
 
         <div class="table-container">
           <table>
             <thead>
               <tr>
-                <th>Ícone / Cor</th>
-                <th>Nome</th>
+                <th style="width: 80px;">Ícone / Cor</th>
+                <th>Nome da Categoria</th>
                 <th>Tipo</th>
-                <th style="text-align: right;">Origem</th>
+                <th>Lançamentos</th>
+                <th>Origem</th>
+                <th style="text-align: right; width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="categoriesTableBody">
@@ -1062,11 +1307,14 @@ object WebDesktopAppHtml {
         </label>
         <div id="txRecurringInputs" style="display: none; align-items: center; gap: 8px; margin-top: 4px;">
           <span style="font-size: 12px; color: var(--text-muted);">Repetir por:</span>
-          <select id="txRecurringMonths" class="form-select" style="width: 120px;">
+          <select id="txRecurringMonths" class="form-select" style="width: 180px;">
+            <option value="always" selected>Sempre (fixo todo mês)</option>
             <option value="3">3 meses</option>
             <option value="6">6 meses</option>
             <option value="12">12 meses</option>
             <option value="24">24 meses</option>
+            <option value="36">36 meses</option>
+            <option value="60">60 meses</option>
           </select>
         </div>
       </div>
@@ -1125,11 +1373,68 @@ object WebDesktopAppHtml {
     </div>
   </div>
 
+  <!-- MODAL: CATEGORY -->
+  <div id="categoryModal" class="modal-overlay">
+    <div class="modal" style="max-width: 480px;">
+      <div class="modal-header">
+        <div id="categoryModalTitle" class="modal-title">Editar Categoria</div>
+        <button class="action-btn" onclick="closeCategoryModal()">✕</button>
+      </div>
+
+      <input type="hidden" id="catEditId" value="">
+      <input type="hidden" id="catEditOldName" value="">
+
+      <div class="form-group">
+        <label class="form-label">Tipo da Categoria</label>
+        <div style="display: flex; gap: 8px;">
+          <button id="catTypeExpenseBtn" type="button" class="btn" style="flex: 1; background: var(--expense); color: white;" onclick="setCategoryType('EXPENSE')">Despesa</button>
+          <button id="catTypeIncomeBtn" type="button" class="btn btn-secondary" style="flex: 1;" onclick="setCategoryType('INCOME')">Receita</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nome da Categoria</label>
+        <input id="catName" class="form-input" type="text" placeholder="Ex: Mercado, Assinaturas, Freelance..." required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Ícone / Emoji</label>
+        <div id="catIconList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+          <!-- Emoji chips -->
+        </div>
+        <input id="catIconInput" class="form-input" type="text" style="width: 110px;" placeholder="Ícone" maxlength="4">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Cor da Categoria</label>
+        <div id="catColorPresets" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+          <!-- Color circles -->
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input id="catColorInput" type="color" value="#10B981" style="width: 42px; height: 36px; border: none; border-radius: 6px; cursor: pointer; background: transparent;">
+          <span id="catColorHexText" style="font-family: monospace; font-size: 13px; color: var(--text-muted);">#10B981</span>
+        </div>
+      </div>
+
+      <div class="form-group" id="catRenameTransactionsGroup" style="display: none;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input id="catRenameTransactions" type="checkbox" checked>
+          <span>Atualizar lançamentos já existentes com o novo nome</span>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCategoryModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveCategory()">Salvar Categoria</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: PIN AUTH -->
   <div id="authModal" class="modal-overlay">
     <div class="modal" style="max-width: 400px; text-align: center;">
-      <div style="font-size: 32px; margin-bottom: 8px;">🔐</div>
-      <h3 style="font-size: 18px; font-weight: 700;">Acesso Protegido</h3>
+      <img src="/api/logo" alt="Logo BUMoney" style="width: 68px; height: 68px; border-radius: 16px; margin: 0 auto 12px; display: block; object-fit: cover; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onerror="this.style.display='none'">
+      <h3 style="font-size: 18px; font-weight: 700;">Acesso Protegido • BUMoney</h3>
       <p style="color: var(--text-muted); font-size: 13px;">
         Digite o <strong>código PIN de 6 dígitos</strong> exibido na tela do app no celular:
       </p>
@@ -1196,12 +1501,16 @@ object WebDesktopAppHtml {
 
       const titles = {
         dashboard: "Visão Geral",
+        analytics: "Análises & Estatísticas de Gastos",
         transactions: "Lançamentos e Movimentações",
         cards: "Cartões de Crédito",
-        categories: "Categorias & Metas",
+        categories: "Categorias Personalizadas",
         sync: "Sincronização P2P Local"
       };
       document.getElementById("pageTitle").textContent = titles[viewName] || "BUMoney";
+      if (viewName === "analytics") {
+        renderAnalytics();
+      }
     }
 
     function updateMonthLabel() {
@@ -1214,6 +1523,7 @@ object WebDesktopAppHtml {
       else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
       updateMonthLabel();
       renderDashboard();
+      renderAnalytics();
       filterTransactions();
     }
 
@@ -1222,6 +1532,7 @@ object WebDesktopAppHtml {
       currentMonth = new Date().getMonth();
       updateMonthLabel();
       renderDashboard();
+      renderAnalytics();
       filterTransactions();
     }
 
@@ -1286,6 +1597,7 @@ object WebDesktopAppHtml {
         document.getElementById("syncLastTime").textContent = new Date().toLocaleTimeString();
 
         renderDashboard();
+        renderAnalytics();
         populateFilters();
         filterTransactions();
         renderCards();
@@ -1344,17 +1656,23 @@ object WebDesktopAppHtml {
         }
       });
 
-      // Overall balance
+      // Saldo acumulado considerar até o mês que eu filtro;
       let totalBalance = 0;
       txs.forEach(t => {
-        if (t.type === "INCOME") totalBalance += t.amount;
-        else totalBalance -= t.amount;
+        const d = new Date(t.timestamp);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        if (y < currentYear || (y === currentYear && m <= currentMonth)) {
+          if (t.type === "INCOME") totalBalance += t.amount;
+          else totalBalance -= t.amount;
+        }
       });
 
       const savings = income - expense;
       const savingsRate = income > 0 ? Math.round((savings / income) * 100) : 0;
 
       document.getElementById("metricBalance").textContent = formatBRL(totalBalance);
+      document.getElementById("metricBalanceSub").textContent = "Até " + MONTH_NAMES[currentMonth] + " " + currentYear;
       document.getElementById("metricIncome").textContent = formatBRL(income);
       document.getElementById("metricIncomeCount").textContent = `${'$'}{incomeCount} receitas`;
       document.getElementById("metricExpense").textContent = formatBRL(expense);
@@ -1601,24 +1919,175 @@ object WebDesktopAppHtml {
       });
     }
 
-    // CATEGORIES RENDERING
+    // CATEGORIES RENDERING & MANAGEMENT
+    let editingCategoryId = null;
+    let editingCategoryOldName = "";
+    let selectedCatType = "EXPENSE";
+
+    function setCategoryType(type) {
+      selectedCatType = type;
+      const expBtn = document.getElementById("catTypeExpenseBtn");
+      const incBtn = document.getElementById("catTypeIncomeBtn");
+      if (type === "EXPENSE") {
+        expBtn.className = "btn";
+        expBtn.style.background = "var(--expense)";
+        expBtn.style.color = "white";
+        incBtn.className = "btn btn-secondary";
+        incBtn.style.background = "";
+        incBtn.style.color = "";
+      } else {
+        incBtn.className = "btn";
+        incBtn.style.background = "var(--income)";
+        incBtn.style.color = "white";
+        expBtn.className = "btn btn-secondary";
+        expBtn.style.background = "";
+        expBtn.style.color = "";
+      }
+    }
+
+    const PRESET_ICONS = ["🛒", "🍔", "🚗", "💡", "💊", "🎓", "✈️", "🎮", "🏠", "💰", "💼", "📈", "🎁", "🏷️", "💳", "☕", "🏋️", "📱", "🐾", "🔧"];
+    const PRESET_COLORS = ["#10B981", "#EF4444", "#3B82F6", "#8B5CF6", "#F59E0B", "#EC4899", "#14B8A6", "#6366F1", "#F97316", "#06B6D4", "#84CC16", "#64748B"];
+
+    function openCategoryModal(cat = null) {
+      editingCategoryId = cat ? cat.id : null;
+      editingCategoryOldName = cat ? cat.name : "";
+      
+      document.getElementById("categoryModalTitle").textContent = cat ? "Editar Categoria" : "Nova Categoria";
+      document.getElementById("catName").value = cat ? cat.name : "";
+      setCategoryType(cat ? cat.type : "EXPENSE");
+      
+      const icon = cat ? (cat.iconName || "🏷️") : "🏷️";
+      document.getElementById("catIconInput").value = icon;
+      
+      const color = cat ? (cat.colorHex || "#10B981") : "#10B981";
+      document.getElementById("catColorInput").value = color;
+      document.getElementById("catColorHexText").textContent = color;
+      
+      const iconContainer = document.getElementById("catIconList");
+      iconContainer.innerHTML = PRESET_ICONS.map(e => 
+        `<button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 15px;" onclick="document.getElementById('catIconInput').value='${'$'}{e}'">${'$'}{e}</button>`
+      ).join("");
+      
+      const colorContainer = document.getElementById("catColorPresets");
+      colorContainer.innerHTML = PRESET_COLORS.map(c => 
+        `<div style="width: 22px; height: 22px; border-radius: 50%; background: ${'$'}{c}; cursor: pointer; border: 2px solid ${'$'}{c === color ? '#fff' : 'transparent'};" onclick="document.getElementById('catColorInput').value='${'$'}{c}'; document.getElementById('catColorHexText').textContent='${'$'}{c}';"></div>`
+      ).join("");
+      
+      document.getElementById("catColorInput").oninput = (e) => {
+        document.getElementById("catColorHexText").textContent = e.target.value;
+      };
+
+      const renameGroup = document.getElementById("catRenameTransactionsGroup");
+      if (cat) {
+        renameGroup.style.display = "block";
+      } else {
+        renameGroup.style.display = "none";
+      }
+
+      document.getElementById("categoryModal").classList.add("active");
+    }
+
+    function closeCategoryModal() {
+      document.getElementById("categoryModal").classList.remove("active");
+    }
+
+    async function saveCategory() {
+      const name = document.getElementById("catName").value.trim();
+      const type = selectedCatType;
+      const iconName = document.getElementById("catIconInput").value.trim() || "🏷️";
+      const colorHex = document.getElementById("catColorInput").value;
+      const renameInTransactions = document.getElementById("catRenameTransactions").checked;
+
+      if (!name) {
+        alert("Digite o nome da categoria.");
+        return;
+      }
+
+      const payload = {
+        name,
+        type,
+        iconName,
+        colorHex,
+        oldName: editingCategoryOldName,
+        renameInTransactions
+      };
+
+      try {
+        const url = editingCategoryId ? `/api/categories/${'$'}{editingCategoryId}?token=${'$'}{sessionToken}` : `/api/categories?token=${'$'}{sessionToken}`;
+        const method = editingCategoryId ? "PUT" : "POST";
+        const resp = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const res = await resp.json();
+        if (res.success) {
+          closeCategoryModal();
+          showToast(editingCategoryId ? "Categoria atualizada!" : "Categoria criada!");
+          loadData(false);
+        } else {
+          alert("Erro: " + (res.error || "Falha ao salvar categoria"));
+        }
+      } catch (e) {
+        alert("Erro de comunicação com o celular.");
+      }
+    }
+
+    async function deleteCategory(id, name) {
+      if (!confirm(`Deseja excluir a categoria "${'$'}{name}"?`)) return;
+      try {
+        const resp = await fetch(`/api/categories/${'$'}{id}?token=${'$'}{sessionToken}`, { method: "DELETE" });
+        const res = await resp.json();
+        if (res.success) {
+          showToast("Categoria excluída!");
+          loadData(false);
+        } else {
+          alert("Erro: " + (res.error || "Não foi possível excluir"));
+        }
+      } catch (e) {
+        alert("Erro ao excluir categoria.");
+      }
+    }
+
     function renderCategories() {
       const tbody = document.getElementById("categoriesTableBody");
       tbody.innerHTML = "";
       const cats = allData.categories || [];
+      const txs = allData.transactions || [];
 
-      cats.forEach(c => {
+      // Count transactions per category
+      const txCounts = {};
+      txs.forEach(t => {
+        txCounts[t.category] = (txCounts[t.category] || 0) + 1;
+      });
+
+      cats.forEach((c) => {
+        const count = txCounts[c.name] || 0;
+        const catJson = JSON.stringify(c).replace(/"/g, '&quot;');
         tbody.innerHTML += `
           <tr>
             <td>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background: ${'$'}{c.colorHex || '#10B981'};"></div>
-                <span>${'$'}{c.iconName || '🏷️'}</span>
+                <span style="font-size: 15px;">${'$'}{c.iconName || '🏷️'}</span>
               </div>
             </td>
             <td style="font-weight: 600;">${'$'}{escapeHtml(c.name)}</td>
             <td><span class="badge ${'$'}{c.type === 'INCOME' ? 'badge-income' : 'badge-expense'}">${'$'}{c.type === 'INCOME' ? 'Receita' : 'Despesa'}</span></td>
-            <td style="text-align: right; color: var(--text-dim); font-size: 12px;">${'$'}{c.isDefault ? 'Padrão do Sistema' : 'Personalizada'}</td>
+            <td><span class="badge badge-tag">${'$'}{count} lançamentos</span></td>
+            <td><span style="font-size: 12px; color: var(--text-dim);">${'$'}{c.isDefault ? 'Padrão Sistema' : 'Personalizada'}</span></td>
+            <td style="text-align: right;">
+              <div class="actions-cell" style="justify-content: flex-end;">
+                <button class="action-btn" title="Editar categoria" onclick="openCategoryModal(${'$'}{catJson})">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                ${'$'}{!c.isDefault ? `
+                  <button class="action-btn delete" title="Excluir" onclick="deleteCategory(${'$'}{c.id}, '${'$'}{escapeHtml(c.name)}')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
+                ` : ''}
+              </div>
+            </td>
           </tr>
         `;
       });
@@ -1702,7 +2171,9 @@ object WebDesktopAppHtml {
       const isInstallment = document.getElementById("txIsInstallment").checked;
       const totalInstallments = isInstallment ? parseInt(document.getElementById("txTotalInstallments").value) : 1;
       const isRecurring = document.getElementById("txIsRecurring").checked;
-      const recurringMonths = isRecurring ? parseInt(document.getElementById("txRecurringMonths").value) : 1;
+      const recurringPeriodVal = document.getElementById("txRecurringMonths").value;
+      const isAlways = isRecurring && recurringPeriodVal === "always";
+      const recurringMonths = isRecurring ? (isAlways ? 60 : parseInt(recurringPeriodVal) || 12) : 1;
 
       if (!title || isNaN(amount) || amount <= 0) {
         alert("Preencha o título e um valor válido.");
@@ -1722,6 +2193,9 @@ object WebDesktopAppHtml {
         isInstallment,
         totalInstallments,
         isRecurring,
+        isAlways,
+        isIndefinite: isAlways,
+        recurringPeriod: recurringPeriodVal,
         recurringMonths
       };
 
@@ -1829,8 +2303,367 @@ object WebDesktopAppHtml {
         } else if (e.key === "Escape") {
           closeTransactionModal();
           closeCardModal();
+          closeCategoryModal();
         }
       });
+    }
+
+    // ANALYTICS & ADVANCED SPENDING INSIGHTS
+    function renderAnalytics() {
+      const period = document.getElementById("analyticsPeriodSelect") ? document.getElementById("analyticsPeriodSelect").value : "CURRENT_MONTH";
+      const txs = allData.transactions || [];
+
+      // Filter transactions by period
+      let filtered = [];
+      if (period === "CURRENT_MONTH") {
+        filtered = txs.filter(t => {
+          const d = new Date(t.timestamp);
+          return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+        });
+      } else if (period === "LAST_3_MONTHS") {
+        const startTarget = new Date(currentYear, currentMonth - 2, 1).getTime();
+        const endTarget = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).getTime();
+        filtered = txs.filter(t => t.timestamp >= startTarget && t.timestamp <= endTarget);
+      } else if (period === "LAST_6_MONTHS") {
+        const startTarget = new Date(currentYear, currentMonth - 5, 1).getTime();
+        const endTarget = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).getTime();
+        filtered = txs.filter(t => t.timestamp >= startTarget && t.timestamp <= endTarget);
+      } else if (period === "CURRENT_YEAR") {
+        filtered = txs.filter(t => new Date(t.timestamp).getFullYear() === currentYear);
+      } else {
+        filtered = [...txs];
+      }
+
+      let totalExpense = 0;
+      let totalIncome = 0;
+      const expenses = [];
+      const incomes = [];
+
+      filtered.forEach(t => {
+        if (t.type === "INCOME") {
+          totalIncome += t.amount;
+          incomes.push(t);
+        } else {
+          totalExpense += t.amount;
+          expenses.push(t);
+        }
+      });
+
+      // 1. KPI Cards
+      const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const currentDay = Math.min(new Date().getDate(), daysInCurrentMonth);
+      const daysCount = period === "CURRENT_MONTH" ? Math.max(currentDay, 1) : 30;
+      const dailyAvg = totalExpense / daysCount;
+      document.getElementById("anaDailyAvg").textContent = formatBRL(dailyAvg);
+
+      const projected = period === "CURRENT_MONTH" && currentDay > 0 ? (totalExpense / currentDay) * daysInCurrentMonth : totalExpense;
+      document.getElementById("anaProjectedTotal").textContent = formatBRL(projected);
+      document.getElementById("anaProjectedSub").textContent = period === "CURRENT_MONTH" ? `Estimativa até dia ${'$'}{daysInCurrentMonth}` : "Período consolidado";
+
+      const commitRate = totalIncome > 0 ? Math.round((totalExpense / totalIncome) * 100) : (totalExpense > 0 ? 100 : 0);
+      document.getElementById("anaCommitmentRate").textContent = `${'$'}{commitRate}%`;
+      document.getElementById("anaCommitmentRate").style.color = commitRate > 85 ? "var(--expense)" : (commitRate > 65 ? "var(--warning)" : "var(--income)");
+
+      // Top single expense
+      let topExpense = null;
+      expenses.forEach(e => {
+        if (!topExpense || e.amount > topExpense.amount) topExpense = e;
+      });
+      if (topExpense) {
+        document.getElementById("anaTopExpenseAmount").textContent = formatBRL(topExpense.amount);
+        document.getElementById("anaTopExpenseTitle").textContent = `${'$'}{topExpense.title} (${'$'}{topExpense.category})`;
+      } else {
+        document.getElementById("anaTopExpenseAmount").textContent = "R$ 0,00";
+        document.getElementById("anaTopExpenseTitle").textContent = "Nenhum gasto";
+      }
+
+      // Zero spend days count (in selected month)
+      const monthExpenses = txs.filter(t => {
+        const d = new Date(t.timestamp);
+        return t.type === "EXPENSE" && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      });
+      const activeSpendDaysSet = new Set(monthExpenses.map(t => new Date(t.timestamp).getDate()));
+      const daysAnalyzed = period === "CURRENT_MONTH" ? currentDay : daysInCurrentMonth;
+      let zeroSpendCount = 0;
+      for (let day = 1; day <= daysAnalyzed; day++) {
+        if (!activeSpendDaysSet.has(day)) zeroSpendCount++;
+      }
+      document.getElementById("anaZeroSpendDays").textContent = `${'$'}{zeroSpendCount} dias`;
+
+      // 2. Daily Chart (Dia 1 a 31)
+      const dailyMap = {};
+      let maxDaily = 0;
+      let peakDay = 0;
+      for (let d = 1; d <= 31; d++) dailyMap[d] = 0;
+
+      monthExpenses.forEach(t => {
+        const d = new Date(t.timestamp).getDate();
+        dailyMap[d] = (dailyMap[d] || 0) + t.amount;
+        if (dailyMap[d] > maxDaily) {
+          maxDaily = dailyMap[d];
+          peakDay = d;
+        }
+      });
+
+      document.getElementById("anaDailyPeakDay").textContent = peakDay > 0 ? `Pico: Dia ${'$'}{peakDay} (${'$'}{formatBRL(maxDaily)})` : "Sem gastos";
+
+      const dailyContainer = document.getElementById("anaDailyChartContainer");
+      dailyContainer.innerHTML = "";
+      for (let d = 1; d <= 31; d++) {
+        const val = dailyMap[d] || 0;
+        const heightPct = maxDaily > 0 ? Math.max((val / maxDaily) * 100, 3) : 3;
+        const isPeak = d === peakDay && val > 0;
+        const isZero = val === 0;
+        const color = isPeak ? "var(--expense)" : (isZero ? "rgba(255,255,255,0.06)" : "var(--primary)");
+
+        dailyContainer.innerHTML += `
+          <div class="ana-bar" style="flex: 1; height: ${'$'}{isZero ? '4px' : heightPct + '%'}; background: ${'$'}{color}; border-radius: 3px 3px 0 0;" title="Dia ${'$'}{d}: ${'$'}{formatBRL(val)}"></div>
+        `;
+      }
+
+      // 3. Spend Structure (Rigidez dos Gastos)
+      let recurringSpend = 0;
+      let installmentSpend = 0;
+      let variableSpend = 0;
+
+      expenses.forEach(t => {
+        if (t.isRecurring) recurringSpend += t.amount;
+        else if (t.isInstallment) installmentSpend += t.amount;
+        else variableSpend += t.amount;
+      });
+
+      const totalStruct = totalExpense || 1;
+      const recPct = Math.round((recurringSpend / totalStruct) * 100);
+      const instPct = Math.round((installmentSpend / totalStruct) * 100);
+      const varPct = Math.max(0, 100 - recPct - instPct);
+
+      document.getElementById("anaStructureBars").innerHTML = `
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+            <span>🔄 <strong>Recorrentes / Fixos</strong></span>
+            <span>${'$'}{formatBRL(recurringSpend)} (${'$'}{recPct}%)</span>
+          </div>
+          <div class="progress-bar-bg" style="height: 8px;">
+            <div style="width: ${'$'}{recPct}%; background: #3B82F6; height: 100%; border-radius: 4px;"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+            <span>💳 <strong>Compras Parceladas</strong></span>
+            <span>${'$'}{formatBRL(installmentSpend)} (${'$'}{instPct}%)</span>
+          </div>
+          <div class="progress-bar-bg" style="height: 8px;">
+            <div style="width: ${'$'}{instPct}%; background: #8B5CF6; height: 100%; border-radius: 4px;"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+            <span>🛍️ <strong>Gastos Variáveis / Avulsos</strong></span>
+            <span>${'$'}{formatBRL(variableSpend)} (${'$'}{varPct}%)</span>
+          </div>
+          <div class="progress-bar-bg" style="height: 8px;">
+            <div style="width: ${'$'}{varPct}%; background: #10B981; height: 100%; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `;
+
+      // 4. Category Donut SVG & Breakdown Table
+      const catTotals = {};
+      const catCounts = {};
+      expenses.forEach(t => {
+        catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+        catCounts[t.category] = (catCounts[t.category] || 0) + 1;
+      });
+
+      const catSorted = Object.keys(catTotals).map(name => {
+        const cObj = (allData.categories || []).find(c => c.name === name);
+        return {
+          name,
+          total: catTotals[name],
+          count: catCounts[name] || 1,
+          color: cObj ? cObj.colorHex : "#10B981",
+          icon: cObj ? cObj.iconName : "🏷️"
+        };
+      }).sort((a, b) => b.total - a.total);
+
+      document.getElementById("anaDonutTotalLabel").textContent = formatBRL(totalExpense);
+
+      // Render SVG Donut
+      const svg = document.getElementById("anaDonutSvg");
+      svg.innerHTML = "";
+      const radius = 38;
+      const circumference = 2 * Math.PI * radius; // ~238.76
+      let accumulatedOffset = 0;
+
+      if (catSorted.length === 0) {
+        svg.innerHTML = `<circle r="${'$'}{radius}" cx="50" cy="50" fill="transparent" stroke="rgba(255,255,255,0.1)" stroke-width="12"/>`;
+      } else {
+        catSorted.forEach(cat => {
+          const pct = cat.total / totalStruct;
+          const strokeLength = pct * circumference;
+          const strokeGap = circumference - strokeLength;
+
+          svg.innerHTML += `
+            <circle r="${'$'}{radius}" cx="50" cy="50" fill="transparent"
+              stroke="${'$'}{cat.color}"
+              stroke-width="12"
+              stroke-dasharray="${'$'}{strokeLength} ${'$'}{strokeGap}"
+              stroke-dashoffset="${'$'}{-accumulatedOffset}"
+              transform="rotate(-90 50 50)"
+              style="transition: stroke-dasharray 0.3s ease;">
+              <title>${'$'}{cat.name}: ${'$'}{formatBRL(cat.total)} (${'$'}{Math.round(pct * 100)}%)</title>
+            </circle>
+          `;
+          accumulatedOffset += strokeLength;
+        });
+      }
+
+      // Donut legend
+      const legend = document.getElementById("anaDonutLegend");
+      legend.innerHTML = catSorted.slice(0, 5).map(c => `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <div style="width: 10px; height: 10px; border-radius: 50%; background: ${'$'}{c.color};"></div>
+          <span>${'$'}{c.name} (${'$'}{Math.round((c.total / totalStruct) * 100)}%)</span>
+        </div>
+      `).join("");
+
+      // Category table
+      const catTableBody = document.getElementById("anaCategoryRankingTable");
+      catTableBody.innerHTML = "";
+      catSorted.forEach(c => {
+        const pct = Math.round((c.total / totalStruct) * 100);
+        const ticketMedio = c.total / c.count;
+        catTableBody.innerHTML += `
+          <tr>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: ${'$'}{c.color};"></div>
+                <span style="font-weight: 600;">${'$'}{escapeHtml(c.name)}</span>
+              </div>
+            </td>
+            <td>${'$'}{c.count}x</td>
+            <td>${'$'}{formatBRL(ticketMedio)}</td>
+            <td style="font-weight: 700;">${'$'}{formatBRL(c.total)}</td>
+            <td style="text-align: right;">
+              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div class="progress-bar-bg" style="width: 60px; height: 6px;">
+                  <div style="width: ${'$'}{pct}%; background: ${'$'}{c.color}; height: 100%; border-radius: 3px;"></div>
+                </div>
+                <span style="font-size: 12px; font-weight: 600; width: 32px;">${'$'}{pct}%</span>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      // 5. Payment Methods & Cards Breakdown
+      const cardTotals = {};
+      let cashTotal = 0;
+      expenses.forEach(t => {
+        if (t.cardId) cardTotals[t.cardId] = (cardTotals[t.cardId] || 0) + t.amount;
+        else cashTotal += t.amount;
+      });
+
+      const paymentList = document.getElementById("anaPaymentMethodList");
+      paymentList.innerHTML = "";
+      (allData.cards || []).forEach(c => {
+        const spent = cardTotals[c.id] || 0;
+        const pct = Math.round((spent / totalStruct) * 100);
+        paymentList.innerHTML += `
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+              <span>💳 <strong>${'$'}{escapeHtml(c.name)}</strong> (•• ${'$'}{c.lastFourDigits || '••••'})</span>
+              <span>${'$'}{formatBRL(spent)} (${'$'}{pct}%)</span>
+            </div>
+            <div class="progress-bar-bg" style="height: 8px;">
+              <div style="width: ${'$'}{pct}%; background: ${'$'}{c.colorHex || 'var(--primary)'}; height: 100%; border-radius: 4px;"></div>
+            </div>
+          </div>
+        `;
+      });
+      const cashPct = Math.round((cashTotal / totalStruct) * 100);
+      paymentList.innerHTML += `
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+            <span>💵 <strong>Conta Corrente / PIX / Dinheiro</strong></span>
+            <span>${'$'}{formatBRL(cashTotal)} (${'$'}{cashPct}%)</span>
+          </div>
+          <div class="progress-bar-bg" style="height: 8px;">
+            <div style="width: ${'$'}{cashPct}%; background: #10B981; height: 100%; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `;
+
+      // 6. Top 10 Largest Single Purchases Table
+      const topTableBody = document.getElementById("anaTopExpensesTable");
+      topTableBody.innerHTML = "";
+      const top10 = [...expenses].sort((a, b) => b.amount - a.amount).slice(0, 10);
+      top10.forEach((t, i) => {
+        const d = new Date(t.timestamp).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        const pct = Math.round((t.amount / totalStruct) * 100);
+        const rankClass = i === 0 ? "top1" : (i === 1 ? "top2" : (i === 2 ? "top3" : ""));
+        topTableBody.innerHTML += `
+          <tr>
+            <td><span class="rank-num ${'$'}{rankClass}">#${'$'}{i + 1}</span></td>
+            <td style="font-weight: 600;">${'$'}{escapeHtml(t.title)}</td>
+            <td><span class="badge badge-tag">${'$'}{escapeHtml(t.category)}</span></td>
+            <td style="font-size: 12px; color: var(--text-dim);">${'$'}{d}</td>
+            <td style="font-weight: 700; color: var(--expense);">${'$'}{formatBRL(t.amount)}</td>
+            <td style="text-align: right; font-weight: 600;">${'$'}{pct}%</td>
+          </tr>
+        `;
+      });
+
+      // 7. Historical 6-Month Comparison Table
+      const histTableBody = document.getElementById("anaHistoricalTable");
+      histTableBody.innerHTML = "";
+      let prevMonthExp = null;
+
+      for (let i = 5; i >= 0; i--) {
+        const targetDate = new Date(currentYear, currentMonth - i, 1);
+        const y = targetDate.getFullYear();
+        const m = targetDate.getMonth();
+        const monthLabel = MONTH_NAMES[m] + " " + y;
+
+        let mInc = 0;
+        let mExp = 0;
+        txs.forEach(t => {
+          const d = new Date(t.timestamp);
+          if (d.getFullYear() === y && d.getMonth() === m) {
+            if (t.type === "INCOME") mInc += t.amount;
+            else mExp += t.amount;
+          }
+        });
+
+        const net = mInc - mExp;
+        const savRate = mInc > 0 ? Math.round((net / mInc) * 100) : 0;
+        let trend = "-";
+        if (prevMonthExp !== null && prevMonthExp > 0) {
+          const diff = mExp - prevMonthExp;
+          const diffPct = Math.round((Math.abs(diff) / prevMonthExp) * 100);
+          if (diff > 0) {
+            trend = `<span style="color: var(--expense);">▲ +${'$'}{diffPct}% vs mês anterior</span>`;
+          } else if (diff < 0) {
+            trend = `<span style="color: var(--income);">▼ -${'$'}{diffPct}% economia</span>`;
+          } else {
+            trend = `<span>= Estável</span>`;
+          }
+        }
+        prevMonthExp = mExp;
+
+        histTableBody.innerHTML += `
+          <tr>
+            <td style="font-weight: 600;">${'$'}{monthLabel}</td>
+            <td style="color: var(--income); font-weight: 600;">+ ${'$'}{formatBRL(mInc)}</td>
+            <td style="color: var(--expense); font-weight: 600;">- ${'$'}{formatBRL(mExp)}</td>
+            <td style="font-weight: 700; color: ${'$'}{net >= 0 ? 'var(--income)' : 'var(--expense)'};">${'$'}{formatBRL(net)}</td>
+            <td><span class="badge ${'$'}{savRate > 0 ? 'badge-income' : 'badge-expense'}">${'$'}{savRate}%</span></td>
+            <td>${'$'}{trend}</td>
+          </tr>
+        `;
+      }
     }
 
     // HELPERS
