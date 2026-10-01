@@ -58,6 +58,24 @@ fun ImportedNotificationsBottomSheet(
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Pendentes, 1 = Histórico
     var showCustomTestDialog by remember { mutableStateOf(false) }
 
+    // Deduplicate pending notifications defensively in the UI view
+    val distinctPending = remember(pendingNotifications) {
+        val result = mutableListOf<ImportedNotificationEntity>()
+        for (item in pendingNotifications) {
+            val isDup = result.any { existing ->
+                Math.abs(existing.amount - item.amount) < 0.01 &&
+                existing.type.equals(item.type, ignoreCase = true) &&
+                (Math.abs(existing.timestamp - item.timestamp) < 600_000L ||
+                 existing.packageName == item.packageName ||
+                 existing.bankName.equals(item.bankName, ignoreCase = true))
+            }
+            if (!isDup) {
+                result.add(item)
+            }
+        }
+        result
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
@@ -102,7 +120,7 @@ fun ImportedNotificationsBottomSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (pendingNotifications.isNotEmpty()) "${pendingNotifications.size} pendente(s) para revisar" else "Reconhecimento automático de compras e Pix",
+                            text = if (distinctPending.isNotEmpty()) "${distinctPending.size} pendente(s) para revisar" else "Reconhecimento automático de compras e Pix",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -310,7 +328,7 @@ fun ImportedNotificationsBottomSheet(
 
             if (selectedTab == 0) {
                 // TAB 0: PENDENTES
-                if (pendingNotifications.isEmpty()) {
+                if (distinctPending.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -366,11 +384,11 @@ fun ImportedNotificationsBottomSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        if (pendingNotifications.size > 1) {
+                        if (distinctPending.size > 1) {
                             TextButton(onClick = onImportAll) {
                                 Icon(imageVector = Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Importar Todas (${pendingNotifications.size})")
+                                Text("Importar Todas (${distinctPending.size})")
                             }
                         }
                     }
@@ -381,7 +399,7 @@ fun ImportedNotificationsBottomSheet(
                             .heightIn(max = 420.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(pendingNotifications, key = { it.id }) { item ->
+                        items(distinctPending, key = { it.id }) { item ->
                             PendingNotificationCard(
                                 item = item,
                                 creditCards = creditCards,

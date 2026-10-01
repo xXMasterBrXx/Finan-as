@@ -9,6 +9,8 @@ import com.example.data.preferences.UserPreferences
 import com.example.util.BankNotificationParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.UUID
@@ -19,6 +21,8 @@ class ImportedNotificationRepository(
     private val creditCardDao: CreditCardDao,
     private val userPreferences: UserPreferences
 ) {
+
+    private val repoMutex = Mutex()
 
     val pendingNotifications: Flow<List<ImportedNotificationEntity>> =
         importedNotificationDao.getPendingNotifications()
@@ -33,80 +37,98 @@ class ImportedNotificationRepository(
         title: String,
         text: String,
         subtext: String? = null
-    ): ImportedNotificationEntity? = withContext(Dispatchers.IO) {
-        if (!userPreferences.isAutoImportNotificationsEnabled()) return@withContext null
+    ): ImportedNotificationEntity? = repoMutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (!userPreferences.isAutoImportNotificationsEnabled()) return@withContext null
 
-        val parsed = BankNotificationParser.parse(packageName, title, text, subtext) ?: return@withContext null
+            val parsed = BankNotificationParser.parse(packageName, title, text, subtext) ?: return@withContext null
 
-        // Check if bank is disabled in user preferences
-        val disabledBanks = userPreferences.getDisabledBankPackages()
-        if (disabledBanks.contains(packageName)) return@withContext null
+            // Check if bank is disabled in user preferences
+            val disabledBanks = userPreferences.getDisabledBankPackages()
+            if (disabledBanks.contains(packageName)) return@withContext null
 
-        // Try matching a credit card
-        val allCards = creditCardDao.getAllCardsSync()
-        var matchedCardId: Long? = null
-        if (!parsed.cardLastFourDigits.isNullOrBlank()) {
-            matchedCardId = allCards.firstOrNull { it.lastFourDigits == parsed.cardLastFourDigits }?.id
-        }
-        if (matchedCardId == null && parsed.type == "EXPENSE") {
-            matchedCardId = allCards.firstOrNull {
-                it.name.contains(parsed.bankName, ignoreCase = true) ||
-                parsed.bankName.contains(it.name, ignoreCase = true)
-            }?.id
-        }
+            // Try matching a credit card
+            val allCards = creditCardDao.getAllCardsSync()
+            var matchedCardId: Long? = null
+            if (!parsed.cardLastFourDigits.isNullOrBlank()) {
+                matchedCardId = allCards.firstOrNull { it.lastFourDigits == parsed.cardLastFourDigits }?.id
+            }
+            if (matchedCardId == null && parsed.type == "EXPENSE") {
+                matchedCardId = allCards.firstOrNull {
+                    it.name.contains(parsed.bankName, ignoreCase = true) ||
+                    parsed.bankName.contains(it.name, ignoreCase = true)
+                }?.id
+            }
 
-        // =========================================================================
-        // DEDUPLICATION & GOOGLE WALLET + CARD MERGING (3-minute window)
-        // =========================================================================
-        val minTime = System.currentTimeMillis() - 180_000L
-        val isCurrentWallet = BankNotificationParser.isWalletPackage(packageName)
+            // =========================================================================
+            // RIGID DEDUPLICATION & MULTI-NOTIFICATION MERGING (5-minute window + PENDING)
+            // =========================================================================
+            val minTime = System.currentTimeMillis() - 300_000L
+            val isCurrentWallet = BankNotificationParser.isWalletPackage(packageName)
 
-        if (userPreferences.isIgnoreNotificationDuplicatesEnabled()) {
-            val recentSameAmount = importedNotificationDao.getRecentByAmount(parsed.amount, minTime)
-            for (recent in recentSameAmount) {
-                val isRecentWallet = BankNotificationParser.isWalletPackage(recent.packageName)
-                val sameType = recent.type.equals(parsed.type, ignoreCase = true)
-                val isSimilarMerchant = areMerchantsSimilar(recent.merchant, parsed.merchant)
+            val recentList = importedNotificationDao.getRecentNotifications(minTime)
+            val pendingList = importedNotificationDao.getPendingNotificationsSync()
+            val candidateList = (recentList + pendingList).distinctBy { it.id }
 
-                // Match condition: Same amount within 3 minutes and either one is a Wallet OR merchants match
-                if (sameType && (isCurrentWallet || isRecentWallet || isSimilarMerchant)) {
-                    // Case 1: The previously recorded item was from Google Wallet, and now the actual Bank notification arrived.
-                    // The Bank notification brings richer data (real bank name, card digits, specific card match).
-                    // We enrich the existing transaction/notification and discard the duplicate.
-                    if (isRecentWallet && !isCurrentWallet) {
-                        val betterMerchant = if (isValidSpecificMerchant(parsed.merchant)) parsed.merchant else recent.merchant
-                        val betterCardId = matchedCardId ?: recent.matchedCardId
-                        val betterCardDigits = parsed.cardLastFourDigits ?: recent.cardLastFourDigits
+            val duplicateCandidate = candidateList.firstOrNull { candidate ->
+                val amountDiff = Math.abs(candidate.amount - parsed.amount)
+                val sameAmount = amountDiff < 0.01
+                val sameType = candidate.type.equals(parsed.type, ignoreCase = true)
+                if (!sameAmount || !sameType) return@firstOrNull false
 
-                        val updatedRecent = recent.copy(
-                            bankName = parsed.bankName,
-                            merchant = betterMerchant,
-                            cardLastFourDigits = betterCardDigits,
-                            matchedCardId = betterCardId,
-                            rawText = "${recent.rawText} | ${parsed.rawText}"
-                        )
-                        importedNotificationDao.update(updatedRecent)
+                val isCandidateWallet = BankNotificationParser.isWalletPackage(candidate.packageName)
+                val samePackage = candidate.packageName == packageName
+                val sameBank = candidate.bankName.equals(parsed.bankName, ignoreCase = true)
+                val similarMerchant = areMerchantsSimilar(candidate.merchant, parsed.merchant)
+                val candidateIsPending = candidate.status == "PENDING"
+                val withinTimeWindow = Math.abs(candidate.timestamp - parsed.timestamp) < 300_000L
 
-                        if (recent.importedTransactionId != null) {
-                            val existingTx = transactionDao.getById(recent.importedTransactionId)
-                            if (existingTx != null) {
-                                transactionDao.update(
-                                    existingTx.copy(
-                                        title = betterMerchant,
-                                        cardId = betterCardId ?: existingTx.cardId,
-                                        note = "Importado de ${parsed.bankName} (via Google Carteira)"
-                                    )
+                // If within 5 min (or still pending to approve/confirm), and:
+                // - comes from the same bank / package
+                // - OR either one is Google Wallet / Samsung Wallet and the other is Bank
+                // - OR merchants match or are similar / generic
+                (withinTimeWindow || candidateIsPending) &&
+                    (samePackage || sameBank || isCurrentWallet || isCandidateWallet || similarMerchant)
+            }
+
+            if (duplicateCandidate != null) {
+                // If incoming notification brings richer/more specific info, update the existing entry
+                val candidateHasGenericMerchant = isGenericMerchant(duplicateCandidate.merchant)
+                val incomingHasSpecificMerchant = isValidSpecificMerchant(parsed.merchant)
+                val incomingHasCardDigits = !parsed.cardLastFourDigits.isNullOrBlank() && duplicateCandidate.cardLastFourDigits.isNullOrBlank()
+                val incomingHasMatchedCard = matchedCardId != null && duplicateCandidate.matchedCardId == null
+                val isWalletUpgrade = BankNotificationParser.isWalletPackage(duplicateCandidate.packageName) && !isCurrentWallet
+
+                if ((incomingHasSpecificMerchant && candidateHasGenericMerchant) || incomingHasCardDigits || incomingHasMatchedCard || isWalletUpgrade) {
+                    val betterMerchant = if (incomingHasSpecificMerchant) parsed.merchant else duplicateCandidate.merchant
+                    val betterCardDigits = parsed.cardLastFourDigits ?: duplicateCandidate.cardLastFourDigits
+                    val betterCardId = matchedCardId ?: duplicateCandidate.matchedCardId
+                    val betterBankName = if (!isCurrentWallet) parsed.bankName else duplicateCandidate.bankName
+
+                    val updated = duplicateCandidate.copy(
+                        bankName = betterBankName,
+                        merchant = betterMerchant,
+                        cardLastFourDigits = betterCardDigits,
+                        matchedCardId = betterCardId,
+                        rawText = "${duplicateCandidate.rawText} | ${parsed.rawText}"
+                    )
+                    importedNotificationDao.update(updated)
+
+                    if (duplicateCandidate.importedTransactionId != null) {
+                        val existingTx = transactionDao.getById(duplicateCandidate.importedTransactionId)
+                        if (existingTx != null) {
+                            transactionDao.update(
+                                existingTx.copy(
+                                    title = betterMerchant,
+                                    cardId = betterCardId ?: existingTx.cardId,
+                                    note = "Importado de $betterBankName"
                                 )
-                            }
+                            )
                         }
-                        return@withContext null
                     }
-
-                    // Case 2: The Bank notification was recorded first, and Google Wallet notification arrived second.
-                    // Or both are duplicate notifications from the same bank.
-                    // Safely ignore the incoming notification as a duplicate!
-                    return@withContext null
                 }
+                // Discard duplicate: do not create another pending notification or insert duplicate!
+                return@withContext null
             }
 
             // Also verify against recent entries in the transactions table
@@ -122,61 +144,142 @@ class ImportedNotificationRepository(
                 }
                 return@withContext null
             }
+
+            // =========================================================================
+            // PROCESS IMPORT: AUTO or CONFIRM
+            // =========================================================================
+            val mode = userPreferences.getAutoImportMode() // "AUTO" or "CONFIRM"
+
+            if (mode == "AUTO") {
+                val newTx = TransactionEntity(
+                    title = parsed.merchant,
+                    amount = parsed.amount,
+                    type = parsed.type,
+                    category = parsed.category,
+                    timestamp = parsed.timestamp,
+                    note = if (isCurrentWallet) "Importado via Google Carteira" else "Importado automaticamente de ${parsed.bankName}",
+                    cardId = matchedCardId,
+                    syncUuid = UUID.randomUUID().toString()
+                )
+                val txId = transactionDao.insert(newTx)
+
+                val entity = ImportedNotificationEntity(
+                    packageName = parsed.packageName,
+                    bankName = parsed.bankName,
+                    rawTitle = parsed.rawTitle,
+                    rawText = parsed.rawText,
+                    amount = parsed.amount,
+                    type = parsed.type,
+                    merchant = parsed.merchant,
+                    category = parsed.category,
+                    cardLastFourDigits = parsed.cardLastFourDigits,
+                    matchedCardId = matchedCardId,
+                    timestamp = parsed.timestamp,
+                    status = "AUTO_IMPORTED",
+                    importedTransactionId = txId
+                )
+                val entityId = importedNotificationDao.insert(entity)
+                return@withContext entity.copy(id = entityId)
+            } else {
+                val entity = ImportedNotificationEntity(
+                    packageName = parsed.packageName,
+                    bankName = parsed.bankName,
+                    rawTitle = parsed.rawTitle,
+                    rawText = parsed.rawText,
+                    amount = parsed.amount,
+                    type = parsed.type,
+                    merchant = parsed.merchant,
+                    category = parsed.category,
+                    cardLastFourDigits = parsed.cardLastFourDigits,
+                    matchedCardId = matchedCardId,
+                    timestamp = parsed.timestamp,
+                    status = "PENDING"
+                )
+                val entityId = importedNotificationDao.insert(entity)
+                return@withContext entity.copy(id = entityId)
+            }
         }
+    }
 
-        // =========================================================================
-        // PROCESS IMPORT: AUTO or CONFIRM
-        // =========================================================================
-        val mode = userPreferences.getAutoImportMode() // "AUTO" or "CONFIRM"
+    suspend fun cleanupDuplicatePendingNotifications() = withContext(Dispatchers.IO) {
+        repoMutex.withLock {
+            val pendingList = importedNotificationDao.getPendingNotificationsSync()
+            if (pendingList.size <= 1) return@withLock
 
-        if (mode == "AUTO") {
-            val newTx = TransactionEntity(
-                title = parsed.merchant,
-                amount = parsed.amount,
-                type = parsed.type,
-                category = parsed.category,
-                timestamp = parsed.timestamp,
-                note = if (isCurrentWallet) "Importado via Google Carteira" else "Importado automaticamente de ${parsed.bankName}",
-                cardId = matchedCardId,
-                syncUuid = UUID.randomUUID().toString()
-            )
-            val txId = transactionDao.insert(newTx)
+            val toDeleteIds = mutableListOf<Long>()
+            val keptList = mutableListOf<ImportedNotificationEntity>()
 
-            val entity = ImportedNotificationEntity(
-                packageName = parsed.packageName,
-                bankName = parsed.bankName,
-                rawTitle = parsed.rawTitle,
-                rawText = parsed.rawText,
-                amount = parsed.amount,
-                type = parsed.type,
-                merchant = parsed.merchant,
-                category = parsed.category,
-                cardLastFourDigits = parsed.cardLastFourDigits,
-                matchedCardId = matchedCardId,
-                timestamp = parsed.timestamp,
-                status = "AUTO_IMPORTED",
-                importedTransactionId = txId
-            )
-            val entityId = importedNotificationDao.insert(entity)
-            return@withContext entity.copy(id = entityId)
-        } else {
-            val entity = ImportedNotificationEntity(
-                packageName = parsed.packageName,
-                bankName = parsed.bankName,
-                rawTitle = parsed.rawTitle,
-                rawText = parsed.rawText,
-                amount = parsed.amount,
-                type = parsed.type,
-                merchant = parsed.merchant,
-                category = parsed.category,
-                cardLastFourDigits = parsed.cardLastFourDigits,
-                matchedCardId = matchedCardId,
-                timestamp = parsed.timestamp,
-                status = "PENDING"
-            )
-            val entityId = importedNotificationDao.insert(entity)
-            return@withContext entity.copy(id = entityId)
+            for (item in pendingList) {
+                val duplicate = keptList.firstOrNull { kept ->
+                    val amountDiff = Math.abs(kept.amount - item.amount)
+                    val sameAmount = amountDiff < 0.01
+                    val sameType = kept.type.equals(item.type, ignoreCase = true)
+                    if (!sameAmount || !sameType) return@firstOrNull false
+
+                    val timeDiff = Math.abs(kept.timestamp - item.timestamp)
+                    val closeTime = timeDiff < 600_000L // 10 minutes
+                    val sameBank = kept.bankName.equals(item.bankName, ignoreCase = true) || kept.packageName == item.packageName
+                    val similarMerchant = areMerchantsSimilar(kept.merchant, item.merchant)
+
+                    closeTime || sameBank || similarMerchant
+                }
+
+                if (duplicate != null) {
+                    val keptHasGeneric = isGenericMerchant(duplicate.merchant)
+                    val itemHasSpecific = isValidSpecificMerchant(item.merchant)
+                    val itemHasCard = item.matchedCardId != null && duplicate.matchedCardId == null
+                    val itemHasDigits = !item.cardLastFourDigits.isNullOrBlank() && duplicate.cardLastFourDigits.isNullOrBlank()
+
+                    if ((itemHasSpecific && keptHasGeneric) || itemHasCard || itemHasDigits) {
+                        val updated = duplicate.copy(
+                            merchant = if (itemHasSpecific) item.merchant else duplicate.merchant,
+                            matchedCardId = item.matchedCardId ?: duplicate.matchedCardId,
+                            cardLastFourDigits = item.cardLastFourDigits ?: duplicate.cardLastFourDigits
+                        )
+                        importedNotificationDao.update(updated)
+                        keptList.remove(duplicate)
+                        keptList.add(updated)
+                    }
+
+                    toDeleteIds.add(item.id)
+                } else {
+                    keptList.add(item)
+                }
+            }
+
+            if (toDeleteIds.isNotEmpty()) {
+                importedNotificationDao.deleteByIds(toDeleteIds)
+            }
         }
+    }
+
+    fun isGenericMerchant(merchant: String): Boolean {
+        if (merchant.isBlank()) return true
+        val lower = BankNotificationParser.removeAccents(merchant.lowercase(Locale.getDefault())).trim()
+        val genericTerms = listOf(
+            "compra no cartao", "compra no cartão", "compra no credito", "compra no crédito",
+            "compra no debito", "compra no débito", "compra aprovada", "compra realizada",
+            "gasto no cartao", "gasto no cartão", "cartao de credito", "cartão de crédito",
+            "cartao de debito", "cartão de débito", "cartao final", "cartão final",
+            "transferencia", "transferência", "pix", "transferencia / pix", "transferência / pix",
+            "estabelecimento", "pagamento", "notificacao bancaria", "notificação bancária",
+            "compra", "transacao aprovada", "transação aprovada", "transacao realizada",
+            "transação realizada", "nova transacao", "nova transação"
+        )
+        if (genericTerms.any { lower.contains(it) }) return true
+
+        // Also check if merchant equals or contains known bank names
+        val isBankName = BankNotificationParser.BANK_PACKAGE_MAP.values.any { bankName ->
+            val normBank = BankNotificationParser.removeAccents(bankName.lowercase(Locale.getDefault()))
+            lower == normBank || lower.startsWith("$normBank ") || lower.endsWith(" $normBank")
+        }
+        if (isBankName) return true
+
+        return false
+    }
+
+    private fun isValidSpecificMerchant(merchant: String): Boolean {
+        return !isGenericMerchant(merchant)
     }
 
     private fun areMerchantsSimilar(m1: String, m2: String): Boolean {
@@ -186,23 +289,15 @@ class ImportedNotificationRepository(
         if (n1 == n2) return true
         if (n1.contains(n2) || n2.contains(n1)) return true
 
+        // If either one is generic, they match (one is generic alert, other is specific merchant)
+        if (isGenericMerchant(m1) || isGenericMerchant(m2)) return true
+
         val words1 = n1.split(" ", "-", "*", "/", ".").map { it.trim() }.filter { it.length > 2 }.toSet()
         val words2 = n2.split(" ", "-", "*", "/", ".").map { it.trim() }.filter { it.length > 2 }.toSet()
         if (words1.isNotEmpty() && words2.isNotEmpty()) {
             if (words1.intersect(words2).isNotEmpty()) return true
         }
         return false
-    }
-
-    private fun isValidSpecificMerchant(merchant: String): Boolean {
-        if (merchant.isBlank()) return false
-        val lower = merchant.lowercase(Locale.getDefault())
-        if (lower == "gasto no cartao" || lower == "gasto no cartão" ||
-            lower == "transferencia / pix" || lower == "transferência / pix" ||
-            lower == "estabelecimento" || lower == "pagamento") {
-            return false
-        }
-        return true
     }
 
     suspend fun confirmAndImport(

@@ -304,6 +304,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         categoryRepository = CategoryRepository(db.customCategoryDao(), p2pSyncManager)
         notificationRepository = NotificationRepository(db.notificationDao(), db.transactionDao(), db.creditCardDao(), userPreferences)
         importedNotificationRepository = ImportedNotificationRepository(db.importedNotificationDao(), db.transactionDao(), db.creditCardDao(), userPreferences)
+        viewModelScope.launch {
+            importedNotificationRepository.cleanupDuplicatePendingNotifications()
+        }
         backupManager = com.example.data.backup.LocalBackupManager(application, db, userPreferences)
         refreshBackupList()
         checkScheduledBackup()
@@ -1567,7 +1570,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun scanActiveBankNotifications(): Int {
         val count = com.example.service.BankNotificationListenerService.scanActiveNotifications()
         refreshNotificationListenerStatus()
+        viewModelScope.launch {
+            importedNotificationRepository.cleanupDuplicatePendingNotifications()
+        }
         return count
+    }
+
+    fun cleanupDuplicateImportedNotifications() {
+        viewModelScope.launch {
+            importedNotificationRepository.cleanupDuplicatePendingNotifications()
+        }
     }
 
     // Web PC Access (Desktop Browser P2P)

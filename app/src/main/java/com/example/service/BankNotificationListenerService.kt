@@ -28,6 +28,14 @@ class BankNotificationListenerService : NotificationListenerService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private val recentProcessedKeys = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, Long>(100, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+                return size > 300
+            }
+        }
+    )
+
     companion object {
         private const val TAG = "BankNotifListener"
 
@@ -128,7 +136,22 @@ class BankNotificationListenerService : NotificationListenerService() {
         // Ignore notifications from our own app
         if (packageName == applicationContext.packageName) return false
 
+        // Ignore ongoing / persistent system notifications
+        if (sbn.isOngoing) return false
+
         val notif = sbn.notification ?: return false
+
+        // Ignore group summary container notifications
+        if ((notif.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return false
+
+        val sbnKey = sbn.key ?: "${packageName}|${sbn.id}|${sbn.tag}"
+        val now = System.currentTimeMillis()
+        val lastProcessed = recentProcessedKeys[sbnKey]
+        if (lastProcessed != null && (now - lastProcessed) < 15_000L) {
+            // Already processed this exact notification key in the last 15 seconds
+            return false
+        }
+
         val extras = notif.extras ?: return false
 
         // 1. Extract title (trying standard title, big title, etc.)
@@ -172,6 +195,9 @@ class BankNotificationListenerService : NotificationListenerService() {
             return false
         }
 
+        // Record key as processed so rapid notification updates are debounced
+        recentProcessedKeys[sbnKey] = now
+
         // 4. Process and persist into Room database
         val context = applicationContext
         val db = AppDatabase.getInstance(context)
@@ -193,7 +219,7 @@ class BankNotificationListenerService : NotificationListenerService() {
                     subtext = subtext.ifBlank { null }
                 )
                 if (result != null && userPrefs.isNotifyOnImportEnabled()) {
-                    showImportNotification(context, result.merchant, result.amount, result.bankName, result.status)
+                    showImportNotification(context, result.id, result.merchant, result.amount, result.bankName, result.status)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error importing bank notification", e)
@@ -205,6 +231,7 @@ class BankNotificationListenerService : NotificationListenerService() {
 
     private fun showImportNotification(
         context: Context,
+        resultId: Long,
         merchant: String,
         amount: Double,
         bankName: String,
@@ -260,8 +287,9 @@ class BankNotificationListenerService : NotificationListenerService() {
             .setContentIntent(pendingIntent)
             .build()
 
+        val notifId = (resultId.toInt() and 0x7FFFFFFF)
         try {
-            notificationManager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
+            notificationManager.notify(notifId, notification)
         } catch (e: SecurityException) {
             // Ignored if POST_NOTIFICATIONS runtime permission revoked
         }
