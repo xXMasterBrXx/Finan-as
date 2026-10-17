@@ -91,13 +91,10 @@ class BankNotificationListenerService : NotificationListenerService() {
         Log.d(TAG, "BankNotificationListenerService disconnected")
 
         // Request rebind if disconnected unexpectedly by the OS
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                val component = ComponentName(this, BankNotificationListenerService::class.java)
-                requestRebind(component)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to request rebind on disconnect", e)
-            }
+        try {
+            com.example.util.NotificationManagerHelper.forceReconnectNotificationListener(applicationContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request reconnect on disconnect", e)
         }
     }
 
@@ -111,7 +108,11 @@ class BankNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        handleStatusBarNotification(sbn)
+        try {
+            handleStatusBarNotification(sbn)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Unexpected error handling notification in onNotificationPosted", t)
+        }
     }
 
     fun processAllActiveNotifications(): Int {
@@ -123,110 +124,121 @@ class BankNotificationListenerService : NotificationListenerService() {
 
         var count = 0
         for (sbn in active) {
-            if (handleStatusBarNotification(sbn)) {
-                count++
+            try {
+                if (handleStatusBarNotification(sbn)) {
+                    count++
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error processing active notification: ${sbn.packageName}", t)
             }
         }
         return count
     }
 
     private fun handleStatusBarNotification(sbn: StatusBarNotification): Boolean {
-        val packageName = sbn.packageName ?: return false
+        try {
+            val packageName = sbn.packageName ?: return false
 
-        // Ignore notifications from our own app
-        if (packageName == applicationContext.packageName) return false
+            // Ignore notifications from our own app
+            if (packageName == applicationContext.packageName) return false
 
-        // Ignore ongoing / persistent system notifications
-        if (sbn.isOngoing) return false
+            // Ignore ongoing / persistent system notifications
+            if (sbn.isOngoing) return false
 
-        val notif = sbn.notification ?: return false
+            val notif = sbn.notification ?: return false
 
-        // Ignore group summary container notifications
-        if ((notif.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return false
+            // Ignore group summary container notifications
+            if ((notif.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return false
 
-        val sbnKey = sbn.key ?: "${packageName}|${sbn.id}|${sbn.tag}"
-        val now = System.currentTimeMillis()
-        val lastProcessed = recentProcessedKeys[sbnKey]
-        if (lastProcessed != null && (now - lastProcessed) < 15_000L) {
-            // Already processed this exact notification key in the last 15 seconds
-            return false
-        }
-
-        val extras = notif.extras ?: return false
-
-        // 1. Extract title (trying standard title, big title, etc.)
-        val title = (extras.getCharSequence(Notification.EXTRA_TITLE)
-            ?: extras.getCharSequence("android.title.big")
-            ?: extras.getCharSequence("android.title")
-            ?: "").toString().trim()
-
-        // 2. Extract text from all potential notification fields (text, bigText, textLines, ticker, summary)
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim() ?: ""
-        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim() ?: ""
-        val subtext = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim() ?: ""
-        val summaryText = extras.getCharSequence("android.summaryText")?.toString()?.trim() ?: ""
-        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" ") ?: ""
-        val ticker = notif.tickerText?.toString()?.trim() ?: ""
-
-        val combinedContent = buildString {
-            if (text.isNotBlank()) append(text)
-            if (bigText.isNotBlank() && bigText != text) {
-                if (isNotEmpty()) append(" ")
-                append(bigText)
+            val sbnKey = sbn.key ?: "${packageName}|${sbn.id}|${sbn.tag}"
+            val now = System.currentTimeMillis()
+            val lastProcessed = recentProcessedKeys[sbnKey]
+            if (lastProcessed != null && (now - lastProcessed) < 15_000L) {
+                // Already processed this exact notification key in the last 15 seconds
+                return false
             }
-            if (lines.isNotBlank() && !contains(lines)) {
-                if (isNotEmpty()) append(" ")
-                append(lines)
-            }
-            if (ticker.isNotBlank() && !contains(ticker)) {
-                if (isNotEmpty()) append(" ")
-                append(ticker)
-            }
-            if (summaryText.isNotBlank() && !contains(summaryText)) {
-                if (isNotEmpty()) append(" ")
-                append(summaryText)
-            }
-        }.trim()
 
-        if (title.isBlank() && combinedContent.isBlank()) return false
+            val extras = try { notif.extras } catch (e: Exception) { null } ?: return false
 
-        // 3. Verify if it is a genuine bank transaction notification
-        if (!BankNotificationParser.isBankNotification(packageName, title, combinedContent)) {
-            return false
-        }
+            // 1. Extract title safely (trying standard title, big title, etc.)
+            val title = try {
+                (extras.getCharSequence(Notification.EXTRA_TITLE)
+                    ?: extras.getCharSequence("android.title.big")
+                    ?: extras.getCharSequence("android.title")
+                    ?: "").toString().trim()
+            } catch (e: Exception) { "" }
 
-        // Record key as processed so rapid notification updates are debounced
-        recentProcessedKeys[sbnKey] = now
+            // 2. Extract text from all potential notification fields safely
+            val text = try { extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
+            val bigText = try { extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
+            val subtext = try { extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
+            val summaryText = try { extras.getCharSequence("android.summaryText")?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
+            val lines = try { extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" ") ?: "" } catch (e: Exception) { "" }
+            val ticker = try { notif.tickerText?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
 
-        // 4. Process and persist into Room database
-        val context = applicationContext
-        val db = AppDatabase.getInstance(context)
-        val userPrefs = UserPreferences.getInstance(context)
-
-        val repository = ImportedNotificationRepository(
-            importedNotificationDao = db.importedNotificationDao(),
-            transactionDao = db.transactionDao(),
-            creditCardDao = db.creditCardDao(),
-            userPreferences = userPrefs
-        )
-
-        serviceScope.launch {
-            try {
-                val result = repository.processNotification(
-                    packageName = packageName,
-                    title = title,
-                    text = combinedContent,
-                    subtext = subtext.ifBlank { null }
-                )
-                if (result != null && userPrefs.isNotifyOnImportEnabled()) {
-                    showImportNotification(context, result.id, result.merchant, result.amount, result.bankName, result.status)
+            val combinedContent = buildString {
+                if (text.isNotBlank()) append(text)
+                if (bigText.isNotBlank() && bigText != text) {
+                    if (isNotEmpty()) append(" ")
+                    append(bigText)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error importing bank notification", e)
-            }
-        }
+                if (lines.isNotBlank() && !contains(lines)) {
+                    if (isNotEmpty()) append(" ")
+                    append(lines)
+                }
+                if (ticker.isNotBlank() && !contains(ticker)) {
+                    if (isNotEmpty()) append(" ")
+                    append(ticker)
+                }
+                if (summaryText.isNotBlank() && !contains(summaryText)) {
+                    if (isNotEmpty()) append(" ")
+                    append(summaryText)
+                }
+            }.trim()
 
-        return true
+            if (title.isBlank() && combinedContent.isBlank()) return false
+
+            // 3. Verify if it is a genuine bank transaction notification
+            if (!BankNotificationParser.isBankNotification(packageName, title, combinedContent)) {
+                return false
+            }
+
+            // Record key as processed so rapid notification updates are debounced
+            recentProcessedKeys[sbnKey] = now
+
+            // 4. Process and persist into Room database
+            val context = applicationContext
+            val db = AppDatabase.getInstance(context)
+            val userPrefs = UserPreferences.getInstance(context)
+
+            val repository = ImportedNotificationRepository(
+                importedNotificationDao = db.importedNotificationDao(),
+                transactionDao = db.transactionDao(),
+                creditCardDao = db.creditCardDao(),
+                userPreferences = userPrefs
+            )
+
+            serviceScope.launch {
+                try {
+                    val result = repository.processNotification(
+                        packageName = packageName,
+                        title = title,
+                        text = combinedContent,
+                        subtext = subtext.ifBlank { null }
+                    )
+                    if (result != null && userPrefs.isNotifyOnImportEnabled()) {
+                        showImportNotification(context, result.id, result.merchant, result.amount, result.bankName, result.status)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error importing bank notification", e)
+                }
+            }
+
+            return true
+        } catch (t: Throwable) {
+            Log.e(TAG, "Unexpected error in handleStatusBarNotification: ${sbn.packageName}", t)
+            return false
+        }
     }
 
     private fun showImportNotification(

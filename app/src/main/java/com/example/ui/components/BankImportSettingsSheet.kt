@@ -31,6 +31,11 @@ import com.example.ui.theme.IncomeGreen
 @Composable
 fun BankImportSettingsSheet(
     userPreferences: UserPreferences,
+    isListenerConnected: Boolean = true,
+    onReconnectService: () -> Unit = {},
+    onScanActiveNotifications: () -> Unit = {},
+    onRequestIgnoreBatteryOptimization: () -> Unit = {},
+    isIgnoringBatteryOptimizations: Boolean = true,
     onDismissRequest: () -> Unit,
     onSimulateNotification: (bankPkg: String, title: String, text: String) -> Unit
 ) {
@@ -44,6 +49,7 @@ fun BankImportSettingsSheet(
     val notifyOnImport by userPreferences.autoImportNotifyOnImport.collectAsState()
 
     var isPermissionGranted by remember { mutableStateOf(checkNotificationListenerPermission(context)) }
+    var reconnectionMessage by remember { mutableStateOf<String?>(null) }
 
     // Re-check permission when composable gains focus
     DisposableEffect(Unit) {
@@ -190,6 +196,125 @@ fun BankImportSettingsSheet(
                             Icon(imageVector = Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Ativar Acesso no Android")
+                        }
+                    }
+                }
+            }
+
+            // Real-Time Service Status & Auto-Healing Repair Card
+            if (isPermissionGranted) {
+                val serviceBg = if (isListenerConnected) IncomeGreen.copy(alpha = 0.08f) else Color(0xFFF59E0B).copy(alpha = 0.12f)
+                val serviceBorder = if (isListenerConnected) IncomeGreen.copy(alpha = 0.35f) else Color(0xFFF59E0B).copy(alpha = 0.5f)
+                val serviceDot = if (isListenerConnected) IncomeGreen else Color(0xFFF59E0B)
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = serviceBg),
+                    border = BorderStroke(1.dp, serviceBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(serviceDot)
+                                )
+                                Text(
+                                    text = if (isListenerConnected) "Serviço Conectado e Ativo" else "Serviço Desconectado pelo Android",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = {
+                                    onReconnectService()
+                                    onScanActiveNotifications()
+                                    reconnectionMessage = "Comando de reconexão enviado ao Android!"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.testTag("settings_reconnect_service_button")
+                            ) {
+                                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = if (isListenerConnected) "Testar / Reconectar" else "Reconectar Agora",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (isListenerConnected)
+                                "O leitor está em execução contínua. Caso o sistema congele a captura, toque em 'Testar / Reconectar' para redefinir o vínculo sem precisar fechar o app."
+                            else
+                                "O Android desconectou o leitor em segundo plano. Toque em 'Reconectar Agora' para reativar a captura imediatamente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        if (reconnectionMessage != null) {
+                            Text(
+                                text = reconnectionMessage!!,
+                                style = MaterialTheme.typography.labelSmall.copy(color = IncomeGreen, fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Battery Optimization Warning Card
+            if (!isIgnoringBatteryOptimizations) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.BatteryAlert, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = "Evitar Encerramento pelo Sistema",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Text(
+                            text = "Alguns celulares (Samsung, Xiaomi, Motorola) suspendem a leitura em segundo plano após um tempo com a tela apagada. Defina a bateria como 'Sem restrições' para garantir captura 100% contínua.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedButton(
+                            onClick = onRequestIgnoreBatteryOptimization,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.BatteryChargingFull, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Configurar Bateria sem Restrições")
                         }
                     }
                 }

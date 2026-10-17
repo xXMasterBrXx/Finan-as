@@ -229,6 +229,17 @@ fun FinanceApp(
         }
     }
 
+    var installmentGroupTotalForEdit by remember { mutableStateOf<Double?>(null) }
+
+    LaunchedEffect(transactionToEdit) {
+        val editing = transactionToEdit
+        if (editing != null && editing.isInstallment && !editing.installmentGroupId.isNullOrBlank()) {
+            installmentGroupTotalForEdit = viewModel.getInstallmentGroupTotal(editing.installmentGroupId)
+        } else {
+            installmentGroupTotalForEdit = null
+        }
+    }
+
     var showCardDialog by remember { mutableStateOf(false) }
     var cardToEdit by remember { mutableStateOf<CreditCardEntity?>(null) }
 
@@ -944,12 +955,14 @@ fun FinanceApp(
     if (showAddDialog) {
         TransactionDialog(
             transactionToEdit = transactionToEdit,
+            installmentGroupTotal = installmentGroupTotalForEdit,
             availableCards = creditCards,
             customCategories = customCategories,
             initialCardId = initialCardIdForDialog,
             onDismiss = {
                 showAddDialog = false
                 transactionToEdit = null
+                installmentGroupTotalForEdit = null
                 initialCardIdForDialog = null
             },
             onAddNewCategory = { type ->
@@ -1000,6 +1013,7 @@ fun FinanceApp(
                 }
                 showAddDialog = false
                 transactionToEdit = null
+                installmentGroupTotalForEdit = null
                 initialCardIdForDialog = null
             }
         )
@@ -1169,6 +1183,15 @@ fun FinanceApp(
         }
     }
 
+    val requestOpenImportedSheet by viewModel.requestOpenImportedSheet.collectAsStateWithLifecycle()
+    LaunchedEffect(requestOpenImportedSheet) {
+        if (requestOpenImportedSheet) {
+            viewModel.refreshNotificationListenerStatus()
+            showImportedNotificationsSheet = true
+            viewModel.consumeOpenImportedNotificationsSheet()
+        }
+    }
+
     if (showImportedNotificationsSheet) {
         ImportedNotificationsBottomSheet(
             pendingNotifications = pendingImportedNotifications,
@@ -1181,6 +1204,9 @@ fun FinanceApp(
             },
             onScanActiveNotifications = {
                 viewModel.scanActiveBankNotifications()
+            },
+            onReconnectService = {
+                viewModel.forceReconnectNotificationListener()
             },
             onDismissRequest = { showImportedNotificationsSheet = false },
             onConfirmImport = { id, merchant, amount, category, cardId ->
@@ -1216,6 +1242,17 @@ fun FinanceApp(
     if (showBankImportSettingsSheet) {
         BankImportSettingsSheet(
             userPreferences = com.example.data.preferences.UserPreferences.getInstance(LocalContext.current),
+            isListenerConnected = isNotificationListenerConnected,
+            onReconnectService = {
+                viewModel.forceReconnectNotificationListener()
+            },
+            onScanActiveNotifications = {
+                viewModel.scanActiveBankNotifications()
+            },
+            onRequestIgnoreBatteryOptimization = {
+                viewModel.requestIgnoreBatteryOptimization()
+            },
+            isIgnoringBatteryOptimizations = viewModel.isIgnoringBatteryOptimizations(),
             onDismissRequest = { showBankImportSettingsSheet = false },
             onSimulateNotification = { pkg, title, text ->
                 viewModel.simulateBankNotification(pkg, title, text)

@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ class MainActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+    handleNotificationIntent(intent)
     setContent {
       val viewModel: FinanceViewModel = viewModel()
       financeViewModel = viewModel
@@ -106,9 +108,25 @@ class MainActivity : FragmentActivity() {
     )
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleNotificationIntent(intent)
+  }
+
+  private fun handleNotificationIntent(intent: Intent?) {
+    if (intent == null) return
+    val action = intent.action
+    val extraRoute = intent.getStringExtra("EXTRA_ROUTE")
+    if (action == "com.example.ACTION_VIEW_BANK_IMPORTS" || extraRoute == "bank_imports") {
+      financeViewModel?.openImportedNotificationsSheet()
+    }
+  }
+
   override fun onResume() {
     super.onResume()
     financeViewModel?.refreshNotificationListenerStatus()
+    handleNotificationIntent(intent)
   }
 
   override fun onStop() {

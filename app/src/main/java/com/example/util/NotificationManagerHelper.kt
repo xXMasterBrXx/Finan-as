@@ -114,6 +114,80 @@ object NotificationManagerHelper {
     }
 
     /**
+     * Robust self-healing mechanism for Android NotificationListenerService:
+     * Toggles the component disabled -> enabled in PackageManager and calls requestRebind.
+     * This forces Android's NotificationManagerService to tear down any zombie IPC binder
+     * and re-register the listener without requiring the user to force-stop or clear cache in Settings.
+     */
+    fun forceReconnectNotificationListener(context: Context): Boolean {
+        return try {
+            val componentName = android.content.ComponentName(
+                context,
+                com.example.service.BankNotificationListenerService::class.java
+            )
+            val pm = context.packageManager
+
+            // 1. Reset component in PackageManager to kick Android OS NotificationManagerService
+            pm.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            pm.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+
+            // 2. Request rebind from the OS
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                android.service.notification.NotificationListenerService.requestRebind(componentName)
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Checks if battery optimizations are disabled for BUMoney (unrestricted background execution).
+     */
+    fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Prompts the user or opens Android Settings to exempt BUMoney from battery restrictions,
+     * preventing Android OS from killing the background NotificationListenerService.
+     */
+    fun requestIgnoreBatteryOptimizations(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val fallbackIntent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallbackIntent)
+                } catch (err: Exception) {
+                    err.printStackTrace()
+                }
+            }
+        }
+    }
+
+    /**
      * Dispatches an Android system notification.
      */
     fun showSystemNotification(

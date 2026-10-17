@@ -77,13 +77,16 @@ import com.example.data.model.CategoryItem
 import com.example.data.model.TransactionType
 import com.example.ui.theme.ExpenseRed
 import com.example.ui.theme.IncomeGreen
+import androidx.compose.foundation.BorderStroke
 import com.example.util.Formatters
+import com.example.util.InstallmentCalculator
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TransactionDialog(
     transactionToEdit: TransactionEntity? = null,
+    installmentGroupTotal: Double? = null,
     availableCards: List<CreditCardEntity> = emptyList(),
     customCategories: List<CategoryItem> = emptyList(),
     initialCardId: Long? = null,
@@ -119,7 +122,9 @@ fun TransactionDialog(
     var amountText by remember {
         mutableStateOf(
             if (transactionToEdit != null) {
-                if (transactionToEdit.isInstallment && transactionToEdit.totalInstallments > 1) {
+                if (installmentGroupTotal != null && installmentGroupTotal > 0.0) {
+                    String.format(java.util.Locale.US, "%.2f", installmentGroupTotal)
+                } else if (transactionToEdit.isInstallment && transactionToEdit.totalInstallments > 1) {
                     val total = transactionToEdit.amount * transactionToEdit.totalInstallments
                     String.format(java.util.Locale.US, "%.2f", total)
                 } else {
@@ -654,35 +659,59 @@ fun TransactionDialog(
 
                             val parsed = amountText.toDoubleOrNull() ?: 0.0
                             if (parsed > 0.0) {
+                                val preview = InstallmentCalculator.getPreview(parsed, totalInstallments)
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(10.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(12.dp)
                                     ) {
-                                        Column {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "Valor das parcelas:",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = preview.previewText,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = ExpenseRed
+                                                    )
+                                                )
+                                            }
                                             Text(
-                                                text = "Valor por parcela:",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "${totalInstallments}x de " + Formatters.formatCurrency(parsed / totalInstallments),
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold, color = ExpenseRed)
+                                                text = "Total: " + Formatters.formatCurrency(parsed),
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
-                                        Text(
-                                            text = "Total: " + Formatters.formatCurrency(parsed),
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+
+                                        if (preview.hasDifference) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                            ) {
+                                                Text(
+                                                    text = preview.detailText,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }

@@ -200,6 +200,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _isNotificationListenerConnected = MutableStateFlow(false)
     val isNotificationListenerConnected: StateFlow<Boolean> = _isNotificationListenerConnected.asStateFlow()
 
+    private val _requestOpenImportedSheet = MutableStateFlow(false)
+    val requestOpenImportedSheet: StateFlow<Boolean> = _requestOpenImportedSheet.asStateFlow()
+
     // Biometric Authentication State
     val isBiometricAuthEnabled: StateFlow<Boolean> = userPreferences.biometricAuthEnabled
     private val _isAppUnlocked = MutableStateFlow(!userPreferences.isBiometricAuthEnabled())
@@ -1015,6 +1018,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         return repository.getInstallmentsByGroupSync(groupId)
     }
 
+    suspend fun getInstallmentGroupTotal(groupId: String): Double {
+        return repository.getInstallmentGroupTotalSync(groupId)
+    }
+
     fun deleteInstallmentGroup(groupId: String) {
         viewModelScope.launch {
             repository.deleteInstallmentGroup(groupId)
@@ -1551,15 +1558,42 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun openImportedNotificationsSheet() {
+        _requestOpenImportedSheet.value = true
+    }
+
+    fun consumeOpenImportedNotificationsSheet() {
+        _requestOpenImportedSheet.value = false
+    }
+
     fun refreshNotificationListenerStatus() {
         val app = getApplication<Application>()
         val granted = NotificationManagerHelper.isNotificationListenerPermissionGranted(app)
         _isNotificationListenerGranted.value = granted
-        _isNotificationListenerConnected.value = com.example.service.BankNotificationListenerService.isServiceConnected
+        val isConnected = com.example.service.BankNotificationListenerService.isServiceConnected
+        _isNotificationListenerConnected.value = isConnected
 
-        if (granted) {
-            NotificationManagerHelper.rebindNotificationListener(app)
+        if (granted && !isConnected) {
+            // Auto-heal: reset component and rebind if granted but service is unhooked/zombie
+            NotificationManagerHelper.forceReconnectNotificationListener(app)
         }
+    }
+
+    fun forceReconnectNotificationListener(): Boolean {
+        val app = getApplication<Application>()
+        val success = NotificationManagerHelper.forceReconnectNotificationListener(app)
+        refreshNotificationListenerStatus()
+        return success
+    }
+
+    fun isIgnoringBatteryOptimizations(): Boolean {
+        val app = getApplication<Application>()
+        return NotificationManagerHelper.isIgnoringBatteryOptimizations(app)
+    }
+
+    fun requestIgnoreBatteryOptimization() {
+        val app = getApplication<Application>()
+        NotificationManagerHelper.requestIgnoreBatteryOptimizations(app)
     }
 
     fun openNotificationListenerSettings() {

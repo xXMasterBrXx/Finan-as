@@ -45,6 +45,7 @@ fun ImportedNotificationsBottomSheet(
     isListenerConnected: Boolean = true,
     onRequestPermission: () -> Unit = {},
     onScanActiveNotifications: () -> Unit = {},
+    onReconnectService: () -> Unit = {},
     onDismissRequest: () -> Unit,
     onConfirmImport: (id: Long, merchant: String, amount: Double, category: String, cardId: Long?) -> Unit,
     onDiscard: (id: Long) -> Unit,
@@ -209,15 +210,17 @@ fun ImportedNotificationsBottomSheet(
                     }
                 }
             } else {
+                val cardBg = if (isListenerConnected) IncomeGreen.copy(alpha = 0.08f) else Color(0xFFF59E0B).copy(alpha = 0.12f)
+                val cardBorder = if (isListenerConnected) IncomeGreen.copy(alpha = 0.35f) else Color(0xFFF59E0B).copy(alpha = 0.5f)
+                val statusDotColor = if (isListenerConnected) IncomeGreen else Color(0xFFF59E0B)
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = IncomeGreen.copy(alpha = 0.08f)
-                    ),
-                    border = BorderStroke(1.dp, IncomeGreen.copy(alpha = 0.35f))
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    border = BorderStroke(1.dp, cardBorder)
                 ) {
                     Row(
                         modifier = Modifier
@@ -235,18 +238,21 @@ fun ImportedNotificationsBottomSheet(
                                 modifier = Modifier
                                     .size(10.dp)
                                     .clip(CircleShape)
-                                    .background(IncomeGreen)
+                                    .background(statusDotColor)
                             )
                             Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
-                                    text = "Leitor de Notificações Ativo",
+                                    text = if (isListenerConnected) "Leitor Conectado e Ativo" else "Leitor Desconectado pelo Android",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (isListenerConnected) "Monitorando compras e Pix em tempo real" else "Serviço registrado no sistema Android",
+                                    text = if (isListenerConnected)
+                                        "Monitorando compras e Pix em tempo real"
+                                    else
+                                        "Toque para restaurar a captura sem reiniciar o celular",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2,
@@ -257,20 +263,42 @@ fun ImportedNotificationsBottomSheet(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        FilledTonalButton(
-                            onClick = onScanActiveNotifications,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.testTag("scan_active_notifications_button")
-                        ) {
-                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Escanear",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                        if (isListenerConnected) {
+                            FilledTonalButton(
+                                onClick = onScanActiveNotifications,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.testTag("scan_active_notifications_button")
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Escanear",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    onReconnectService()
+                                    onScanActiveNotifications()
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                                modifier = Modifier.testTag("reconnect_notification_listener_button")
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Reconectar",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }

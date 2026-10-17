@@ -1,0 +1,6 @@
+{
+  "summary": "Plano de implementação para correção do erro de centavos no parcelamento, aplicando cálculo exato em centavos com ajuste na última parcela, prévia detalhada no diálogo e correção do recálculo na edição.",
+  "updatedAt": "2026-10-17T00:46:34.673361281Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

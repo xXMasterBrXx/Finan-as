@@ -9,6 +9,7 @@ import com.example.data.preferences.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import com.example.util.InstallmentCalculator
 import java.util.Calendar
 
 class TransactionRepository(
@@ -45,6 +46,11 @@ class TransactionRepository(
         transactionDao.getInstallmentsByGroupSync(groupId)
     }
 
+    suspend fun getInstallmentGroupTotalSync(groupId: String): Double = withContext(Dispatchers.IO) {
+        val list = transactionDao.getInstallmentsByGroupSync(groupId)
+        list.sumOf { it.amount }
+    }
+
     suspend fun deleteInstallmentGroup(groupId: String) = withContext(Dispatchers.IO) {
         transactionDao.markInstallmentGroupDeleted(groupId)
         p2pSyncManager?.broadcastTransactionDelete(syncUuid = "", groupId = groupId)
@@ -61,9 +67,7 @@ class TransactionRepository(
     ): String = withContext(Dispatchers.IO) {
         val groupId = java.util.UUID.randomUUID().toString()
         val count = totalInstallments.coerceAtLeast(1)
-        val rawBase = totalAmount / count
-        val baseAmount = Math.round(rawBase * 100.0) / 100.0
-        val remainder = Math.round((totalAmount - (baseAmount * count)) * 100.0) / 100.0
+        val schedule = InstallmentCalculator.calculateSchedule(totalAmount, count)
 
         val list = mutableListOf<TransactionEntity>()
         for (i in 1..count) {
@@ -71,7 +75,7 @@ class TransactionRepository(
                 timeInMillis = startTimestamp
                 add(Calendar.MONTH, i - 1)
             }
-            val installmentAmount = if (i == 1) (baseAmount + remainder) else baseAmount
+            val installmentAmount = schedule[i - 1]
             list.add(
                 TransactionEntity(
                     title = title.trim(),
